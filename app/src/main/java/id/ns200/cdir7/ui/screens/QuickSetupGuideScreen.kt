@@ -79,14 +79,14 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
         ) {
             Column {
                 Text(
-                    text = "QUICK SETUP & HARDWARE WIRING",
+                    text = "SETUP CDI • KOMISI & KALIBRASI",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     color = MotecOrange
                 )
                 Text(
-                    text = "Panduan Resmi NS200 R7 • STM32WB55 Dual-Bank",
+                    text = "Satu alur dari pemeriksaan BLE sampai TDC, TPS dan READY",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace

@@ -47,7 +47,6 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val packetRate by viewModel.packetRateHz.collectAsState()
     val crcPercent by viewModel.crcValidPercent.collectAsState()
     val telemetryPacketCount by viewModel.telemetryPacketCount.collectAsState()
-    val telemetryRxMessage by viewModel.telemetryRxMessage.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
@@ -788,10 +787,16 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     )
                     TechDataRow(
                         "TELEMETRY RX",
-                        telemetryRxMessage,
+                        when {
+                            !isConnected -> "OFFLINE"
+                            telemetryPacketCount == 0L -> "NO FRAME"
+                            packetRate == 0 -> "STOPPED"
+                            else -> "ACTIVE • #$telemetryPacketCount"
+                        },
                         when {
                             !isConnected -> TextMuted
                             telemetryPacketCount == 0L -> RaceRedline
+                            packetRate == 0 -> RaceRedline
                             crcPercent >= 99f -> RacingLime
                             else -> MotecOrange
                         }

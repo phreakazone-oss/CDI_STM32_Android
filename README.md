@@ -10,7 +10,7 @@ Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-C
 3. [Detail Modul & Layar](#-detail-modul--layar)
    - [1. Dashboard MoTeC & Tacho Slider](#1-dashboard-motec--tacho-slider)
    - [2. Ignition Maps (4-Slot Timing)](#2-ignition-maps-4-slot-timing)
-   - [3. Strobe & Pulser Calibration](#3-strobe--pulser-calibration)
+   - [3. Setup CDI & Kalibrasi TDC](#3-setup-cdi--kalibrasi-tdc)
    - [4. Live Audio Engine Test Bench & MOGE Super Bass](#4-live-audio-engine-test-bench--moge-super-bass)
    - [5. Quick Setup & Wiring Workshop](#5-quick-setup--wiring-workshop)
    - [6. BLE Terminal & Hex Diagnostics](#6-ble-terminal--hex-diagnostics)
@@ -72,7 +72,9 @@ Antarmuka tuning pengapian:
 - **Slot Selector**: Berganti cepat antara Slot 0 (Eco), Slot 1 (Street), Slot 2 (Rain), dan Slot 3 (Race).
 - **Flash / EEPROM Write**: Pengiriman perintah biner ber-checksum untuk menyimpan kurva permanen ke mikrokontroler CDI.
 
-### 3. Strobe & Pulser Calibration
+### 3. Setup CDI & Kalibrasi TDC
+Tab utama **Setup** membuka alur komisi CDI lengkap. Halaman yang sama juga dapat dibuka melalui **Wiring → Komisi CDI**, sehingga tidak ada lagi dua konfigurasi strobo yang berbeda.
+
 Kalibrasi mekanikal sensor pick-up:
 - **Sinkronisasi Lampu Strobo**: Menyalakan pulsa strobo tetap pada sudut pengapian statis untuk pembacaan timing light pada tanda magnet kruk as.
 - **Offset Pulser Derajat**: Menyetel offset pergeseran magnet pick-up coil (-15.0° hingga +15.0°).
@@ -105,6 +107,60 @@ Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULS
   - Dilengkapi *Safety Interlock*: tombol hanya dapat ditekan saat mesin mati (`RPM == 0`) dan tegangan kapasitor aman (`HV < 30V`).
 - **Proteksi Transaksi Ganda**: Seluruh tombol aksi alur setup dilengkapi state pending (`setupCommandPending`) dengan timeout proteksi 5 detik.
 - **Soket CDI 12-pin**: Kode warna kabel asli NS200, jalur koil sekunder, sensor TPS, dan koneksi pinout WeAct STM32WB55CGU6.
+
+#### Cara konfigurasi awal melalui menu Setup
+
+Alur ini dapat dibuka dari dua tempat: tab utama **Setup**, atau **Wiring → Komisi CDI**. Keduanya menggunakan `CdiViewModel` dan status MCU yang sama; perubahan pada salah satu halaman langsung terlihat pada halaman lainnya.
+
+> **Bahaya tegangan tinggi:** kapasitor CDI dapat menyimpan ratusan volt. Pasang atau lepas `JP_HV` hanya saat kontak/kill switch OFF dan pembacaan HV CENTER serta SIDE sudah di bawah 30 V.
+
+1. **Persiapan sebelum menghubungkan BLE**
+   - Pastikan jalur PCB dan soket J1 sudah diverifikasi sesuai menu Wiring.
+   - Lepas `JP_HV`; keluaran charger HV dan koil harus belum aktif.
+   - Nyalakan kontak agar STM32 mendapat daya, tetapi jangan hidupkan mesin.
+   - Buka menu BLE dan hubungkan `NS200-CDI-R7` tanpa melakukan pairing/PIN Android. Tunggu status `GATT READY`.
+
+2. **Tahap 1 — BARU / pemeriksaan komunikasi**
+   - Buka menu **Setup** dan tekan `PERIKSA & LANJUT KE TAHAP 2`.
+   - Aplikasi memeriksa tiga respons secara berurutan: `PING`, `GET,STATUS`, dan `GET,SETUP`.
+   - Hasil lulus membutuhkan ketiga respons diterima, RPM = 0, HV CENTER <30 V, dan HV SIDE <30 V.
+   - Jika `PACKET RATE` masih 0 Hz tetapi tiga respons lulus, kanal kontrol 1003 bekerja namun notifikasi Telemetry 1001 belum masuk. Tahap PULSER dapat dibuka, tetapi jangan mengonfirmasi pulser sebelum nilai RPM/quality sudah terbaca.
+
+3. **Tahap 2 — PULSER**
+   - Konfigurasi awal NS200: edge `FALLING`, `PPR = 1`, dan gate `80 µs`.
+   - Dengan `JP_HV` tetap dilepas, tekan starter selama 2–3 detik.
+   - Pastikan nilai `PULSER QUALITY` mencapai sedikitnya 10 dan RPM berubah dari nol saat starter berputar.
+   - Setelah sinyal stabil, lepaskan starter dan tekan `KONFIRMASI PULSER OK & LANJUT TDC`. Tunggu ACK MCU.
+
+4. **Tahap 3 — TDC / STROBO**
+   - Kontrol strobo sekarang berada di tahap TDC pada menu Setup; tidak ada menu strobo kedua.
+   - Pilih `DENGAN STROBO LED` untuk pengukuran yang dianjurkan. Hubungkan driver lampu timing ke PB9 sesuai Wiring, aktifkan strobo, lalu arahkan lampu ke jendela timing.
+   - Putar starter dan geser offset sedikit demi sedikit sampai tanda `T` tampak diam serta tepat sejajar dengan garis crankcase.
+   - Lepaskan starter. Setelah RPM kembali 0 dan HV tetap <30 V, tekan `SIMPAN TDC STROBO` dan tunggu ACK `TDC_SAVED`.
+   - Pilihan `TANPA STROBO (MANUAL)` hanya menyimpan nilai provisional. Jangan gunakan beban atau RPM tinggi sebelum timing nyata diverifikasi.
+
+5. **Tahap 4 — TPS**
+   - Mesin harus mati dan kontak tetap ON.
+   - Biarkan grip gas tertutup penuh, lalu tekan `GAS TUTUP (0%)` dan tunggu ACK.
+   - Buka gas penuh, lalu tekan `GAS PENUH (100%)`. Firmware hanya menerima nilai OPEN bila lebih besar sedikitnya 50 hitungan ADC dari CLOSED.
+   - Setelah kedua nilai tersimpan, halaman FIRST START akan terbuka.
+
+6. **Tahap 5 — FIRST START**
+   - Dengan `JP_HV` masih dilepas, tekan `AKTIFKAN FIRST START SAFETY MODE` dan tunggu ACK `FIRST_START`.
+   - Mode ini membatasi sistem pada 220 V, koil CENTER saja, advance maksimum 10°, dan limiter 3.000 RPM.
+   - Matikan kontak/kill switch, pastikan kedua HV <30 V, lalu pasang `JP_HV`.
+   - Nyalakan kembali dan starter motor. Biarkan hidup stabil sedikitnya 3 detik tanpa melewati 3.000 RPM.
+   - Matikan melalui kill switch, tunggu RPM 0 dan kedua HV kembali <30 V.
+
+7. **Tahap 6 — READY**
+   - Tekan `READY - CENTER SAJA` untuk konfigurasi awal yang tidak menebak offset busi samping.
+   - `READY - 3 BUSI` hanya boleh dipilih setelah offset SIDE benar-benar diukur; jangan mengisi angka perkiraan.
+   - Tunggu ACK `READY_CENTER` atau `READY_THREE`. Status READY disimpan dalam flash MCU dan tidak memerlukan firmware lain.
+
+8. **Pemakaian setelah READY**
+   - Dengan kontak OFF dan HV <30 V, pastikan `JP_HV` terpasang untuk operasi normal.
+   - Nyalakan kontak, hubungkan BLE, lalu pastikan Dashboard menunjukkan Telemetry `ACTIVE`, sekitar 18–22 Hz, dan CRC mendekati 100%.
+   - Jika perlu mengulang kalibrasi, buka kembali menu Setup. Mengetuk kepala kartu hanya memindahkan halaman; flash MCU berubah hanya setelah perintah mendapat ACK.
 
 ### 6. BLE Terminal & Hex Diagnostics
 Diagnostik teknis tingkat lanjut:

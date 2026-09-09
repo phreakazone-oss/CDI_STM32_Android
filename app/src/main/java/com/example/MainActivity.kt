@@ -147,7 +147,9 @@ fun MainAppScreen(
                     wiringViewModel = wiringViewModel,
                     cdiViewModel = cdiViewModel
                 )
-                ScreenTab.STROBO -> StrobeScreen(cdiViewModel)
+                // Satu flow yang sama juga dibuka dari Wiring -> Komisi CDI.
+                // Kontrol strobo berada pada tahap TDC agar tidak ada dua setup berbeda.
+                ScreenTab.SETUP -> QuickSetupGuideScreen(cdiViewModel)
                 ScreenTab.SUARA -> SoundScreen(cdiViewModel)
                 ScreenTab.BLE -> BleHexScreen(
                     viewModel = cdiViewModel,
@@ -228,7 +230,7 @@ fun MotorsportTopBar(
                         }
                         Text(
                             text = when {
-                                isConnected -> "ONLINE • 20 Hz BLE"
+                                isConnected -> "ONLINE • BLE GATT"
                                 isSimulation -> "SIMULASI DEMO 20Hz"
                                 isBleScanning -> "MEMINDAI PERANGKAT..."
                                 isBleBusy -> "MENGHUBUNGKAN..."
@@ -397,7 +399,7 @@ fun MotorsportBottomNav(
                     ScreenTab.TACHO -> Icons.Default.Speed
                     ScreenTab.MAPS -> Icons.Default.ShowChart
                     ScreenTab.WIRING -> Icons.Default.Build
-                    ScreenTab.STROBO -> Icons.Default.FlashOn
+                    ScreenTab.SETUP -> Icons.Default.FactCheck
                     ScreenTab.SUARA -> Icons.Default.VolumeUp
                     ScreenTab.BLE -> Icons.Default.Bluetooth
                 }
@@ -405,7 +407,7 @@ fun MotorsportBottomNav(
                     ScreenTab.TACHO -> RacingLime
                     ScreenTab.MAPS -> MotecOrange
                     ScreenTab.WIRING -> ElectricCyan
-                    ScreenTab.STROBO -> SensorAmber
+                    ScreenTab.SETUP -> SensorAmber
                     ScreenTab.SUARA -> ElectricCyan
                     ScreenTab.BLE -> RacingLime
                 }

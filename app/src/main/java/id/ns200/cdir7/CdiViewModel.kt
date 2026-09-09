@@ -20,7 +20,7 @@ enum class ScreenTab(val title: String, val badge: String) {
     TACHO("Tacho", "CLUSTER"),
     MAPS("Maps", "KURVA"),
     WIRING("Wiring", "WORKSHOP"),
-    STROBO("Strobo", "TDC"),
+    SETUP("Setup", "KOMISI"),
     SUARA("Suara", "AUDIO"),
     BLE("BLE", "DIAG")
 }
