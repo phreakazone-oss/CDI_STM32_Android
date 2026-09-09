@@ -42,6 +42,10 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val isRevving by viewModel.isRevving.collectAsState()
     val revLimit by viewModel.softRevLimiterRpm.collectAsState()
     val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
+    val isConnected by viewModel.isConnected.collectAsState()
+    val connectionStatus by viewModel.connectionStatus.collectAsState()
+    val packetRate by viewModel.packetRateHz.collectAsState()
+    val crcPercent by viewModel.crcValidPercent.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
@@ -747,6 +751,31 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    TechDataRow(
+                        "GATT STATUS",
+                        if (isConnected) "CONNECTED (GATT READY)" else connectionStatus.uppercase(),
+                        if (isConnected) RacingLime else TextMuted
+                    )
+                    TechDataRow(
+                        "PACKET RATE",
+                        if (isConnected) "$packetRate Hz (Stabil: 18-22 Hz)" else "0 Hz (STANDBY)",
+                        when {
+                            !isConnected || packetRate == 0 -> TextMuted
+                            packetRate in 18..22 -> RacingLime
+                            packetRate in 12..17 || packetRate > 22 -> MotecOrange
+                            else -> RaceRedline
+                        }
+                    )
+                    TechDataRow(
+                        "CRC VALID",
+                        if (isConnected && packetRate > 0) "%.1f%% VALID".format(crcPercent) else "N/A (STANDBY)",
+                        when {
+                            !isConnected || packetRate == 0 -> TextMuted
+                            crcPercent >= 99f -> RacingLime
+                            crcPercent >= 95f -> MotecOrange
+                            else -> RaceRedline
+                        }
+                    )
                     TechDataRow("SETUP STAGE", "${telemetry.stage.name} (${telemetry.stage.label})", when (telemetry.setupStage) {
                         5 -> RacingLime
                         4 -> MotecOrange

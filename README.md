@@ -102,7 +102,7 @@ Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULS
   - Pilihan mode: `OFF`, `ON`, dan `AUTO` (pin J1.7 / PB5 WeAct).
   - Dilengkapi *Safety Interlock*: tombol hanya dapat ditekan saat mesin mati (`RPM == 0`) dan tegangan kapasitor aman (`HV < 30V`).
 - **Proteksi Transaksi Ganda**: Seluruh tombol aksi alur setup dilengkapi state pending (`setupCommandPending`) dengan timeout proteksi 5 detik.
-- **Soket CDI 12-pin**: Kode warna kabel asli NS200, jalur koil sekunder, sensor TPS, dan koneksi pinout WeAct BlackPill STM32F4.
+- **Soket CDI 12-pin**: Kode warna kabel asli NS200, jalur koil sekunder, sensor TPS, dan koneksi pinout WeAct STM32WB55CGU6.
 
 ### 6. BLE Terminal & Hex Diagnostics
 Diagnostik teknis tingkat lanjut:
@@ -111,7 +111,7 @@ Diagnostik teknis tingkat lanjut:
   - Persentase integritas paket valid (`crcValidPercent`) dihitung berbasis validasi CRC16 terhadap total paket dalam jendela 5 detik.
 - **Indikator Kualitas Sambungan BLE (`LinkQuality`)**:
   - **STABIL** (Hijau): Laju 18–22 Hz dan integritas CRC ≥ 99%.
-  - **CUKUP** (Kuning/Oranye): Laju 12–17 Hz atau integritas CRC 95–98.9%.
+  - **CUKUP** (Kuning/Oranye): Laju 12–17 Hz, laju > 22 Hz, atau integritas CRC 95–98.9%.
   - **BURUK** (Merah): Laju < 12 Hz atau integritas CRC < 95%.
   - **TERPUTUS** (Abu-abu): Status offline atau 0 Hz.
 - **GATT Specification Overview**: Menampilkan UUID Service, Telemetry Notify Char, Command Write Char, dan Response Notify Char.
@@ -158,20 +158,24 @@ Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 
 ---
 
-## 🔌 Skema Wiring Pinout CDI R7.2
+## 🔌 Skema Wiring Pinout CDI R7.2 (Konektor 12-Pin J1)
 
-| Pin | Kode Warna (NS200) | Deskripsi Jalur | Spesifikasi |
-|:---:|:-------------------|:----------------|:------------|
-| 1   | Hitam / Kuning     | Power Ground    | Rangka / Negatif Aki |
-| 2   | Cokelat            | +12V DC Kontak  | Kunci Kontak (Switched) |
-| 3   | Putih / Merah      | Pulser Pick-up (+) | Sinyal Sensor Kruk As |
-| 4   | Hitam              | Pulser Pick-up (-) | Ground Sensor Pick-up |
-| 5   | Biru / Putih       | TPS Signal In   | Sinyal Sensor Gas (0.5V - 4.5V) |
-| 6   | Merah / Putih      | TPS Reference   | +5V DC Output Sensor |
-| 7   | Oranye             | Koil Busi Tengah| CDI Discharge (~250V Pulse) |
-| 8   | Oranye / Hitam     | Koil Busi Sisi  | Dual Spark Secondary Discharge |
-| 9   | Biru Muda          | Indikator Tachometer | Sinyal Pulsa RPM Spidometer |
-| 10  | Hijau Tua          | Kill Switch In  | Sakelar Engine Cut-off |
+Sesuai rancangan CDI R7.2 dan modul `WiringDataProvider.kt`:
+
+| J1 | Fungsi | Kode Warna (Harness NS200) | Deskripsi Jalur & Destinasi Board (WeAct STM32WB55CGU6) |
+|:--:|:-------|:---------------------------|:--------------------------------------------------------|
+| 1  | NC | Kosong / NC | Tidak terhubung (Not Connected). Isolasi rapi dengan heat-shrink. |
+| 2  | TPS_A | Hijau-Putih | Input sensor bukaan gas pasangan A. Terhubung ke J_TPS (PA3 / PA5 ADC). |
+| 3  | TEMP | Hitam-Putih | Input sensor suhu mesin NTC (Pull-up 4.7k ke 5V, divider clamp BAT54S ke PA4 ADC). |
+| 4  | TPS_B | Abu-Abu | Input sensor bukaan gas pasangan B. Terhubung ke J_TPS (PA3 / PA5 ADC). |
+| 5  | +12 V kontak | Cokelat (+12V) | Input daya utama kunci kontak ON. Melewati sekring FMAIN 5A, DREV SB560, dan choke L47uH. |
+| 6  | COIL_SIDE | Hitam-Merah | Output pulsa HV koil busi samping (Side Plugs). SCR2 BT151 via driver PA2. |
+| 7  | FAN_RELAY | Biru-Kuning | Output kendali relay kipas radiator (Kolektor transistor BC547 sink via PB5). |
+| 8  | NC | Kosong / NC | Tidak terhubung (Not Connected). Cadangan harness. |
+| 9  | NC | Kosong / NC | Tidak terhubung (Not Connected). Cadangan harness. |
+| 10 | PULSER | Putih-Merah | Sinyal input pick-up coil magnet spul (Komparator LM339 precision conditioning ke PA0 TIM2_CH1). |
+| 11 | GND | Hitam-Kuning | Ground utama massa motor (Pusat titik temu ground bintang GND_STAR). |
+| 12 | COIL_CENTER | Oranye | Output pulsa HV koil busi utama tengah (Center Plug). SCR1 BT151 via driver PA1. |
 
 ---
 

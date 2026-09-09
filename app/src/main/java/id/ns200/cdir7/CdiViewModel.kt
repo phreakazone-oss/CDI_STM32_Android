@@ -1008,7 +1008,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
-            bleClient.send("GET,SETUP")
             appendLog("BLE Send: SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
         } else {
             appendLog("TDC Manual Terukur ${clamped}° BTDC disimpan tanpa strobo. Lanjut ke TPS.")
@@ -1373,16 +1372,24 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     "FAN",
                     "SETUP_RESET"
                 )
-                if (operation in setupChangingOperations) {
-                    refreshSetupAfterAck()
-                }
 
                 when {
-                    operation == "LIVE" || operation == "PONG_R7_2" -> Unit
-                    operation.startsWith("LOAD") || operation.startsWith("SAVE") || operation == "LIMIT" -> {
-                        bleClient.send("GET,META"); bleClient.send("GET,STATUS")
+                    operation in setupChangingOperations -> {
+                        refreshSetupAfterAck()
                     }
-                    else -> bleClient.send("GET,SETUP")
+
+                    operation == "LIVE" ||
+                        operation == "OFFSET" ||
+                        operation == "PONG_R7_2" -> Unit
+
+                    operation.startsWith("LOAD") ||
+                        operation.startsWith("SAVE") ||
+                        operation == "LIMIT" -> {
+                        bleClient.send("GET,META")
+                        bleClient.send("GET,STATUS")
+                    }
+
+                    else -> Unit
                 }
             }
             "ERR" -> {

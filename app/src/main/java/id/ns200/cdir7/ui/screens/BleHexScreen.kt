@@ -35,12 +35,24 @@ enum class LinkQuality(val label: String, val color: Color) {
     TERPUTUS("TERPUTUS", Color(0xFF757575))
 }
 
-fun evaluateLinkQuality(connected: Boolean, rateHz: Int, crcPercent: Float): LinkQuality {
-    if (!connected || rateHz <= 0) return LinkQuality.TERPUTUS
+fun evaluateLinkQuality(
+    connected: Boolean,
+    rateHz: Int,
+    crcPercent: Float
+): LinkQuality {
+    if (!connected || rateHz <= 0) {
+        return LinkQuality.TERPUTUS
+    }
+
     return when {
-        rateHz >= 18 && crcPercent >= 99f -> LinkQuality.STABIL
-        rateHz >= 12 && crcPercent >= 95f -> LinkQuality.CUKUP
-        else -> LinkQuality.BURUK
+        crcPercent < 95f || rateHz < 12 ->
+            LinkQuality.BURUK
+
+        rateHz in 18..22 && crcPercent >= 99f ->
+            LinkQuality.STABIL
+
+        else ->
+            LinkQuality.CUKUP
     }
 }
 

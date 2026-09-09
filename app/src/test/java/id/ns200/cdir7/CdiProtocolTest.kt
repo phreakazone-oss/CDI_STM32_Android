@@ -123,4 +123,16 @@ class CdiProtocolTest {
         assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 90.0f))
         assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 8, crcPercent = 85.0f))
     }
+
+    @Test
+    fun excessivePacketRateIsNotStable() {
+        assertEquals(
+            LinkQuality.CUKUP,
+            evaluateLinkQuality(
+                connected = true,
+                rateHz = 30,
+                crcPercent = 100f
+            )
+        )
+    }
 }
