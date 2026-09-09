@@ -28,6 +28,22 @@ import id.ns200.cdir7.CdiProtocol
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.ui.theme.*
 
+enum class LinkQuality(val label: String, val color: Color) {
+    STABIL("STABIL", Color(0xFF00E676)),
+    CUKUP("CUKUP", Color(0xFFFFB300)),
+    BURUK("BURUK", Color(0xFFFF3D00)),
+    TERPUTUS("TERPUTUS", Color(0xFF757575))
+}
+
+fun evaluateLinkQuality(connected: Boolean, rateHz: Int, crcPercent: Float): LinkQuality {
+    if (!connected || rateHz <= 0) return LinkQuality.TERPUTUS
+    return when {
+        rateHz >= 18 && crcPercent >= 99f -> LinkQuality.STABIL
+        rateHz >= 12 && crcPercent >= 95f -> LinkQuality.CUKUP
+        else -> LinkQuality.BURUK
+    }
+}
+
 @SuppressLint("MissingPermission")
 @Composable
 fun BleHexScreen(
@@ -47,6 +63,8 @@ fun BleHexScreen(
     val telemetry by viewModel.telemetry.collectAsState()
     val logs by viewModel.terminalLogs.collectAsState()
 
+    val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
+
     var commandInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
 
@@ -64,7 +82,7 @@ fun BleHexScreen(
                 .fillMaxWidth()
                 .border(
                     1.dp,
-                    if (isConnected) RacingLime else BorderSubtle,
+                    linkQuality.color,
                     RoundedCornerShape(14.dp)
                 )
                 .testTag("ble_status_card"),
@@ -82,15 +100,15 @@ fun BleHexScreen(
                             modifier = Modifier
                                 .size(10.dp)
                                 .clip(CircleShape)
-                                .background(if (isConnected) RacingLime else RaceRedline)
+                                .background(linkQuality.color)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isConnected) "BLE ONLINE • 20 Hz" else "BLE OFFLINE",
+                            text = if (isConnected) "BLE ONLINE • $packetRate Hz • ${linkQuality.label}" else "BLE OFFLINE",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isConnected) RacingLime else RaceRedline
+                            color = linkQuality.color
                         )
                     }
 
@@ -157,10 +175,10 @@ fun BleHexScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     GattSpecRow("SERVICE UUID", "7a8f1000-6c9d-4e40-a45f-0b4b4e533230")
-                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (Notify 20Hz • v3 20 Bytes)")
+                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${packetRate} Hz • ${linkQuality.label} • v3 20 Bytes)")
                     GattSpecRow("COMMAND CHAR", "7a8f1002-... (Write + ACK queue: $pending)")
                     GattSpecRow("RESPONSE CHAR", "7a8f1003-... (Notify ASCII Stream)")
-                    GattSpecRow("CRC16 INTEGRITY", "%.1f%% VALID (Polynomial 0x1021)".format(crcPercent))
+                    GattSpecRow("CRC16 INTEGRITY", "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label))
                 }
             }
         }

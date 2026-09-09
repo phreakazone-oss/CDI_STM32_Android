@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -91,11 +92,71 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _rawPacket = MutableStateFlow(ByteArray(CdiProtocol.TELEMETRY_SIZE))
     val rawPacket: StateFlow<ByteArray> = _rawPacket.asStateFlow()
 
-    private val _packetRateHz = MutableStateFlow(20)
+    private val _packetRateHz = MutableStateFlow(0)
     val packetRateHz: StateFlow<Int> = _packetRateHz.asStateFlow()
 
-    private val _crcValidPercent = MutableStateFlow(100f)
+    private val _crcValidPercent = MutableStateFlow(0f)
     val crcValidPercent: StateFlow<Float> = _crcValidPercent.asStateFlow()
+
+    private data class RxSample(
+        val timestampMs: Long,
+        val valid: Boolean
+    )
+    private val rxSamples = ArrayDeque<RxSample>()
+    private val RX_WINDOW_MS = 5_000L
+
+    // Setup StateFlows (Synchronized from GET,SETUP)
+    private val _pickupEdge = MutableStateFlow("FALLING")
+    val pickupEdge: StateFlow<String> = _pickupEdge.asStateFlow()
+
+    private val _pulserPpr = MutableStateFlow(1)
+    val pulserPpr: StateFlow<Int> = _pulserPpr.asStateFlow()
+
+    private val _gateDurationUs = MutableStateFlow(80)
+    val gateDurationUs: StateFlow<Int> = _gateDurationUs.asStateFlow()
+
+    private val _tpsClosedAdc = MutableStateFlow(0)
+    val tpsClosedAdc: StateFlow<Int> = _tpsClosedAdc.asStateFlow()
+
+    private val _tpsOpenAdc = MutableStateFlow(0)
+    val tpsOpenAdc: StateFlow<Int> = _tpsOpenAdc.asStateFlow()
+
+    private val _firstStartHv = MutableStateFlow(220)
+    val firstStartHv: StateFlow<Int> = _firstStartHv.asStateFlow()
+
+    private val _fanMode = MutableStateFlow("AUTO")
+    val fanMode: StateFlow<String> = _fanMode.asStateFlow()
+
+    private val _sideOffsetCdeg = MutableStateFlow(0)
+    val sideOffsetCdeg: StateFlow<Int> = _sideOffsetCdeg.asStateFlow()
+
+    private val _setupCommandPending = MutableStateFlow(false)
+    val setupCommandPending: StateFlow<Boolean> = _setupCommandPending.asStateFlow()
+
+    private var pendingTimeoutJob: Job? = null
+
+    private fun markSetupCommandPending() {
+        _setupCommandPending.value = true
+        pendingTimeoutJob?.cancel()
+        pendingTimeoutJob = viewModelScope.launch {
+            delay(5000)
+            if (_setupCommandPending.value) {
+                _setupCommandPending.value = false
+                appendLog("Timeout menunggu respons MCU")
+            }
+        }
+    }
+
+    private fun clearSetupCommandPending() {
+        _setupCommandPending.value = false
+        pendingTimeoutJob?.cancel()
+    }
+
+    private fun resetBleStatistics() {
+        rxSamples.clear()
+        _packetRateHz.value = 0
+        _crcValidPercent.value = 0f
+    }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
     val mapPresets = listOf(
@@ -876,9 +937,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun setPulserEdge(edge: String) { // "FALLING" or "RISING"
         if (!requireMcuOrDemo("pengaturan edge pulser")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,EDGE,$edge")
             appendLog("BLE Send: SETUP,EDGE,$edge")
         } else {
+            _pickupEdge.value = edge
             appendLog("Pulser Edge diatur ke: $edge (Simulasi)")
         }
         Toast.makeText(context, "Pulser Edge: $edge", Toast.LENGTH_SHORT).show()
@@ -887,9 +950,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun setPulserPpr(ppr: Int) {
         if (!requireMcuOrDemo("pengaturan PPR")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,PPR,$ppr")
             appendLog("BLE Send: SETUP,PPR,$ppr")
         } else {
+            _pulserPpr.value = ppr
             appendLog("Pulser PPR diatur ke: $ppr")
         }
     }
@@ -897,9 +962,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun setGateDurationUs(us: Int) {
         if (!requireMcuOrDemo("pengaturan gate SCR")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,GATE_US,$us")
             appendLog("BLE Send: SETUP,GATE_US,$us")
         } else {
+            _gateDurationUs.value = us
             appendLog("SCR Gate Duration: ${us}µs")
         }
     }
@@ -907,6 +974,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun confirmPulserPickup() {
         if (!requireMcuOrDemo("konfirmasi pickup")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,PICKUP,CONFIRM")
             appendLog("BLE Send: SETUP,PICKUP,CONFIRM")
         } else {
@@ -920,6 +988,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("simpan TDC strobo")) return
         if (!checkFlashSafety("Simpan TDC Strobo")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,SAVE_TDC")
             appendLog("BLE Send: SETUP,SAVE_TDC (TDC Strobo disimpan ke Flash)")
         } else {
@@ -937,6 +1006,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _pulserOffsetDeg.value = clamped
         val triggerCdeg = candidateTriggerCdeg(clamped)
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
             bleClient.send("GET,SETUP")
             appendLog("BLE Send: SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
@@ -953,6 +1023,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun calibrateTpsClosed() {
         if (!requireMcuOrDemo("kalibrasi TPS tertutup")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,TPS,CLOSED")
             appendLog("BLE Send: SETUP,TPS,CLOSED (Simpan Gas Tertutup 0%)")
         } else {
@@ -964,6 +1035,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun calibrateTpsOpen() {
         if (!requireMcuOrDemo("kalibrasi TPS terbuka")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,TPS,OPEN")
             appendLog("BLE Send: SETUP,TPS,OPEN (Simpan Gas Penuh 100%)")
         } else {
@@ -976,6 +1048,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun prepareFirstStartMode() {
         if (!requireMcuOrDemo("FIRST START")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,FIRST_START")
             appendLog("BLE Send: SETUP,FIRST_START (Mode Aman: 220V, CENTER saja, Max 10° Adv, Limiter 3.000 RPM)")
         } else {
@@ -993,6 +1066,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             return
         }
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,READY,CENTER")
             appendLog("BLE Send: SETUP,READY,CENTER (Mode Siap Jalan - Koil CENTER)")
         } else {
@@ -1010,6 +1084,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             return
         }
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,READY,THREE,$sideOffsetCdeg")
             appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Triple Spark Terkalibrasi)")
         } else {
@@ -1022,6 +1097,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun resetSetupWorkflow() {
         if (!requireMcuOrDemo("reset setup")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,RESET,CONFIRM")
             appendLog("BLE Send: SETUP,RESET,CONFIRM (Kembali ke Tahap BARU)")
         } else {
@@ -1034,10 +1110,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun setFanMode(mode: String) { // "OFF", "ON", "AUTO"
         if (!requireMcuOrDemo("pengaturan kipas")) return
         if (bleClient.gattReady) {
+            markSetupCommandPending()
             bleClient.send("SETUP,FAN,$mode")
             appendLog("BLE Send: SETUP,FAN,$mode")
         } else {
-            appendLog("Fan mode: $mode")
+            _fanMode.value = mode
+            appendLog("Fan mode: $mode (Simulasi)")
         }
     }
 
@@ -1087,20 +1165,39 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("GET,STATUS")
             bleClient.send("GET,META")
             bleClient.send("GET,SETUP")
+        } else {
+            resetBleStatistics()
+            clearSetupCommandPending()
         }
         appendLog("BLE: $text")
     }
 
     override fun onTelemetry(value: Telemetry) {
-        _telemetry.value = value
-        _selectedMapSlot.value = value.slot.coerceIn(0, 3)
-        _strobeActive.value = value.strobeEnabled
-        if (!value.strobeEnabled && _pulserOffsetDeg.value == 0f)
-            triggerEditBaseCdeg = value.triggerCdeg.coerceIn(0, 35999)
-        context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
-            .putInt("setup_stage", value.setupStage).apply()
-        if (value.rpm > 100 && _soundEnabled.value) {
-            engineSound.update(value)
+        val current = _telemetry.value
+
+        val merged = value.copy(
+            // Field ini tidak ada dalam paket telemetri v3.
+            // Pertahankan nilai terakhir dari GET,SETUP.
+            setupStage = current.setupStage
+        )
+
+        _telemetry.value = merged
+        _selectedMapSlot.value = merged.slot.coerceIn(0, 3)
+        _strobeActive.value = merged.strobeEnabled
+
+        if (!merged.strobeEnabled && _pulserOffsetDeg.value == 0f) {
+            triggerEditBaseCdeg = merged.triggerCdeg.coerceIn(0, 35999)
+        }
+
+        context.getSharedPreferences(
+            "cdi_r7_prefs",
+            Context.MODE_PRIVATE
+        ).edit()
+            .putInt("setup_stage", merged.setupStage)
+            .apply()
+
+        if (merged.rpm > 100 && _soundEnabled.value) {
+            engineSound.update(merged)
         } else {
             engineSound.stop()
         }
@@ -1108,6 +1205,52 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onRawPacket(bytes: ByteArray) {
         _rawPacket.value = bytes
+
+        val now = SystemClock.elapsedRealtime()
+
+        val valid = CdiProtocol.telemetry(
+            packet = bytes,
+            previous = _telemetry.value
+        ) != null
+
+        rxSamples.addLast(RxSample(now, valid))
+
+        while (
+            rxSamples.isNotEmpty() &&
+            now - rxSamples.first().timestampMs > RX_WINDOW_MS
+        ) {
+            rxSamples.removeFirst()
+        }
+
+        val total = rxSamples.size
+        val validCount = rxSamples.count { it.valid }
+
+        _crcValidPercent.value =
+            if (total == 0) 0f
+            else validCount * 100f / total
+
+        val validSamples = rxSamples.filter { it.valid }
+
+        _packetRateHz.value =
+            if (validSamples.size < 2) {
+                0
+            } else {
+                val duration =
+                    validSamples.last().timestampMs -
+                        validSamples.first().timestampMs
+
+                if (duration <= 0L) 0
+                else (
+                    (validSamples.size - 1) * 1000f / duration
+                ).roundToInt()
+            }
+    }
+
+    private fun refreshSetupAfterAck() {
+        viewModelScope.launch {
+            delay(100)
+            requestSetupState()
+        }
     }
 
     override fun onResponse(value: String) {
@@ -1147,24 +1290,93 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             "SETUP" -> if (f.size >= 14) {
-                val trigger = f[3].toIntOrNull() ?: _telemetry.value.triggerCdeg
-                val center = f[10].toIntOrNull() == 1; val side = f[11].toIntOrNull() == 1
+                val stage = f[1].toIntOrNull()?.coerceIn(0, 5)
+                    ?: _telemetry.value.setupStage
+
+                val edgeCode = f[2].toIntOrNull() ?: 0
+                val trigger = f[3].toIntOrNull()
+                    ?: _telemetry.value.triggerCdeg
+
+                val sideOffset = f[4].toIntOrNull() ?: 0
+                val ppr = f[5].toIntOrNull()?.coerceIn(1, 4) ?: 1
+                val gateUs = f[6].toIntOrNull()?.coerceIn(40, 150) ?: 80
+                val tpsClosed = f[7].toIntOrNull() ?: 0
+                val tpsOpen = f[8].toIntOrNull() ?: 0
+                val firstStartHv = f[9].toIntOrNull() ?: 220
+
+                val center = f[10].toIntOrNull() == 1
+                val side = f[11].toIntOrNull() == 1
+                val fanCode = f[12].toIntOrNull() ?: 2
+                val quality = f[13].toIntOrNull() ?: 0
+
+                _pickupEdge.value =
+                    if (edgeCode == 1) "RISING" else "FALLING"
+
+                _sideOffsetCdeg.value = sideOffset
+                _pulserPpr.value = ppr
+                _gateDurationUs.value = gateUs
+                _tpsClosedAdc.value = tpsClosed
+                _tpsOpenAdc.value = tpsOpen
+                _firstStartHv.value = firstStartHv
+
+                _fanMode.value = when (fanCode) {
+                    0 -> "OFF"
+                    1 -> "ON"
+                    else -> "AUTO"
+                }
+
                 _telemetry.value = _telemetry.value.copy(
-                    setupStage = f[1].toIntOrNull() ?: _telemetry.value.setupStage,
+                    setupStage = stage,
                     triggerCdeg = trigger,
-                    outputFlags = (if (center) 1 else 0) or (if (side) 2 else 0) or
+                    outputFlags =
+                        (if (center) 1 else 0) or
+                        (if (side) 2 else 0) or
                         (if (_strobeActive.value) 4 else 0),
-                    pickupQuality = f[13].toIntOrNull() ?: _telemetry.value.pickupQuality
+                    pickupQuality = quality
                 )
-                if (!_strobeActive.value && _pulserOffsetDeg.value == 0f)
+
+                context.getSharedPreferences(
+                    "cdi_r7_prefs",
+                    Context.MODE_PRIVATE
+                ).edit()
+                    .putInt("setup_stage", stage)
+                    .apply()
+
+                if (!_strobeActive.value && _pulserOffsetDeg.value == 0f) {
                     triggerEditBaseCdeg = trigger.coerceIn(0, 35999)
+                }
+
+                appendLog(
+                    "SETUP sync: stage=$stage edge=${_pickupEdge.value} " +
+                        "PPR=$ppr gate=${gateUs}us fan=${_fanMode.value}"
+                )
             }
             "ACK" -> {
+                clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
                 if (operation == "TDC_SAVED" || operation == "TDC_MANUAL_SAVED")
                     _flashSaved.value = true
                 if (operation !in setOf("LIVE", "OFFSET", "PONG_R7_2"))
                     Toast.makeText(context, "MCU ACK: $operation", Toast.LENGTH_SHORT).show()
+
+                val setupChangingOperations = setOf(
+                    "PICKUP_OK",
+                    "EDGE_REQUIRES_PICKUP_TDC",
+                    "PPR_REQUIRES_TDC",
+                    "GATE_US",
+                    "TDC_SAVED",
+                    "TDC_MANUAL_SAVED",
+                    "TPS",
+                    "FIRST_START",
+                    "READY_CENTER",
+                    "READY_THREE",
+                    "FAN",
+                    "SETUP_RESET"
+                )
+                if (operation in setupChangingOperations) {
+                    refreshSetupAfterAck()
+                }
+
                 when {
                     operation == "LIVE" || operation == "PONG_R7_2" -> Unit
                     operation.startsWith("LOAD") || operation.startsWith("SAVE") || operation == "LIMIT" -> {
@@ -1173,7 +1385,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     else -> bleClient.send("GET,SETUP")
                 }
             }
-            "ERR" -> Toast.makeText(context, "MCU menolak: ${f.drop(1).joinToString(",")}", Toast.LENGTH_LONG).show()
+            "ERR" -> {
+                clearSetupCommandPending()
+                Toast.makeText(context, "MCU menolak: ${f.drop(1).joinToString(",")}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

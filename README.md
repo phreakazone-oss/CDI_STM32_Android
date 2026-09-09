@@ -92,32 +92,69 @@ Simulator suara akustik knalpot motor berdaya tinggi:
 - **Master Audio Switch**: Fitur proteksi anti-dengung instan (*zero hanging drone*).
 
 ### 5. Quick Setup & Wiring Workshop
-Panduan perkabelan CDI R7.2:
-- Soket CDI 12-pin lengkap dengan warna kabel motor Bajaj Pulsar 200 NS.
-- Penjelasan fungsi jalur: Ground, 12V Switched, Pick-up Coil (+/-), TPS 5V/Signal, Koil Pengapian Utama, dan Koil Pengapian Samping.
+Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULSER -> TDC -> TPS -> FIRST START -> READY):
+- **Preservasi Status Workflow**: Nilai tahap setup (`setupStage`) dipreservasi dari respons `GET,SETUP` atau penyimpanan lokal agar tidak ter-reset saat menerima frame telemetri berkala.
+- **Konfigurasi Pulser Lanjutan (`PulserAdvancedSettings`)**:
+  - Pilihan Trigger Edge: `FALLING` (standar NS200) atau `RISING`.
+  - Pilihan Rasio Pulsa: 1, 2, 3, atau 4 PPR (Pulse Per Revolution).
+  - Durasi Gate SCR: 60 µs, 80 µs (standar NS200), 100 µs, atau 120 µs.
+- **Kontrol Mode Kipas Radiator (`FanModeSettings`)**:
+  - Pilihan mode: `OFF`, `ON`, dan `AUTO` (pin J1.7 / PB5 WeAct).
+  - Dilengkapi *Safety Interlock*: tombol hanya dapat ditekan saat mesin mati (`RPM == 0`) dan tegangan kapasitor aman (`HV < 30V`).
+- **Proteksi Transaksi Ganda**: Seluruh tombol aksi alur setup dilengkapi state pending (`setupCommandPending`) dengan timeout proteksi 5 detik.
+- **Soket CDI 12-pin**: Kode warna kabel asli NS200, jalur koil sekunder, sensor TPS, dan koneksi pinout WeAct BlackPill STM32F4.
 
 ### 6. BLE Terminal & Hex Diagnostics
 Diagnostik teknis tingkat lanjut:
-- Monitor paket heksadesimal mentah (Raw HEX Packet) 20 Hz.
-- Log komunikasi RX/TX dengan verifikasi checksum.
-- Konsol manual perintah CDI (GET STATUS, GET META, FLASH WRITE, dll.).
+- **Statistik Paket Real-Time (Sliding Window 5 Detik)**:
+  - Frekuensi aktual transmisi paket (`packetRateHz`) dihitung secara dinamis dari stempel waktu frame masuk.
+  - Persentase integritas paket valid (`crcValidPercent`) dihitung berbasis validasi CRC16 terhadap total paket dalam jendela 5 detik.
+- **Indikator Kualitas Sambungan BLE (`LinkQuality`)**:
+  - **STABIL** (Hijau): Laju 18–22 Hz dan integritas CRC ≥ 99%.
+  - **CUKUP** (Kuning/Oranye): Laju 12–17 Hz atau integritas CRC 95–98.9%.
+  - **BURUK** (Merah): Laju < 12 Hz atau integritas CRC < 95%.
+  - **TERPUTUS** (Abu-abu): Status offline atau 0 Hz.
+- **GATT Specification Overview**: Menampilkan UUID Service, Telemetry Notify Char, Command Write Char, dan Response Notify Char.
+- **Monitor Paket Heksadesimal Mentah (Raw HEX Packet)**: Menampilkan 20 bytes data v3 lengkap dengan byte highlight per field.
+- **Konsol Manual Perintah CDI**: Terminal input untuk eksekusi perintah teks MCU dan log respons.
 
 ---
 
 ## 📡 Protokol Komunikasi BLE
 
-Aplikasi berkomunikasi melalui BLE UART Custom Service:
+Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 
-- **Service UUID**: `0000FFE0-0000-1000-8000-00805F9B34FB`
-- **Characteristic RX/TX UUID**: `0000FFE1-0000-1000-8000-00805F9B34FB`
-- **Format Telemetri Paket Biner (Core 16-byte)**:
-  `[0xAA] [0x55] [SEQ_H] [SEQ_L] [RPM_H] [RPM_L] [TPS_H] [TPS_L] [ADV_H] [ADV_L] [HV_C] [HV_S] [BAT_H] [BAT_L] [FLAGS] [CRC8]`
-- **Perintah Teks**:
+- **Service UUID**: `7a8f1000-6c9d-4e40-a45f-0b4b4e533230`
+- **Telemetry Characteristic UUID (Notify 20 Hz)**: `7a8f1001-6c9d-4e40-a45f-0b4b4e533230`
+- **Command Characteristic UUID (Write)**: `7a8f1002-6c9d-4e40-a45f-0b4b4e533230`
+- **Response Characteristic UUID (Notify ASCII Stream)**: `7a8f1003-6c9d-4e40-a45f-0b4b4e533230`
+- **Format Telemetri Paket Biner v3 (20 Bytes)**:
+  - `[0..1]` : Magic Header `0x15, 0xCD` (NS200 CDI Identifier)
+  - `[2]` : Protocol Version (`0x03`)
+  - `[3]` : Frame Kind (`0` = CORE, `1` = EXTRA)
+  - `[4..5]` : Sequence Counter (16-bit LE)
+  - `[6..7]` : Engine Speed RPM (16-bit LE)
+  - `[8..9]` : Throttle Position Sensor ADC/Raw (16-bit LE)
+  - `[10..11]` : Spark Advance (centi-degree BTDC, 16-bit LE)
+  - `[12..13]` : Battery Voltage (centi-volt, 16-bit LE)
+  - `[14..15]` : HV Center Capacitor Voltage (16-bit LE)
+  - `[16..17]` : HV Side Capacitor Voltage (16-bit LE)
+  - `[18..19]` : CRC16-CCITT Checksum (Polinomial `0x1021`, Initial `0xFFFF`, Final XOR `0x0000`)
+- **Protokol Respons ASCII (`GET,SETUP`)**:
+  Format: `SETUP,<stage>,<edge>,<triggerCdeg>,<sideOffsetCdeg>,<ppr>,<gateUs>,<tpsClosed>,<tpsOpen>,<firstStartHv>,<center>,<side>,<fanMode>,<quality>`
+  - Parsed penuh ke dalam `StateFlow` dan disinkronkan otomatis pasca-ACK (`refreshSetupAfterAck`).
+- **Perintah Teks Terjadwal**:
   - `GET,STATUS` : Meminta status telemetri lengkap.
-  - `SET,SLOT,<0-3>` : Mengubah slot kurva aktif.
-  - `SET,STROBE,<0|1>` : Mengaktifkan mode kalibrasi strobo.
-  - `SET,LIMITER,<rpm>` : Mengatur batas putaran mesin (*rev limiter*).
-  - `WRITE,FLASH` : Menyimpan parameter aktif ke memori non-volatile.
+  - `GET,SETUP` : Sinkronisasi penuh parameter setup workflow.
+  - `GET,META` : Meminta metadata firmware dan ID hardware.
+  - `SETUP,EDGE,<FALLING|RISING>` : Mengatur trigger edge pulser.
+  - `SETUP,PPR,<1-4>` : Mengatur rasio pulsa per putaran.
+  - `SETUP,GATE_US,<60|80|100|120>` : Mengatur durasi pulsa SCR gate.
+  - `SETUP,FAN,<OFF|ON|AUTO>` : Mengatur mode kontrol relai kipas radiator.
+  - `SETUP,PICKUP,CONFIRM` / `SETUP,SAVE_TDC` / `SETUP,MANUAL_TDC,<cdeg>,CONFIRM` : Kalibrasi titik pengapian.
+  - `SETUP,TPS,<CLOSED|OPEN>` : Kalibrasi rentang bukaan gas.
+  - `SETUP,FIRST_START` / `SETUP,READY,CENTER` / `SETUP,READY,THREE,<offset>` : Tahap pengaktifan output koil.
+  - `SETUP,RESET,CONFIRM` : Reset alur setup ke tahap awal.
 
 ---
 
@@ -165,7 +202,16 @@ Aplikasi berkomunikasi melalui BLE UART Custom Service:
 
 ## 📝 Catatan Rilis (Changelog)
 
-### Versi 7.2.2 (Pembaruan Terkini)
+### Versi 7.2.3 (Pembaruan Terkini)
+- **Preservasi Status Quick Setup**: Mencegah resetting status workflow setup stage saat menerima frame telemetri v3 dari mikrokontroler.
+- **Konfigurasi Pulser Lanjutan**: Dukungan pemilihan Trigger Edge (`FALLING`/`RISING`), rasio pulsa 1–4 PPR, dan durasi trigger gate SCR (60–120 µs) langsung dari antarmuka Quick Setup.
+- **Kontrol Kipas Radiator Terintegrasi**: Pengaturan mode kipas (`OFF`/`ON`/`AUTO`) untuk relai radiator J1.7 (PB5) dilengkapi *Safety Interlock* (wajib RPM 0 dan HV < 30V).
+- **Statistik Paket & Integritas Real-Time**: Implementasi sliding window 5 detik untuk frekuensi paket aktual (`Hz`) dan rasio validitas CRC16 (`%`).
+- **Indikator Kualitas Link BLE Dinamis**: Klasifikasi status kestabilan koneksi (`STABIL`, `CUKUP`, `BURUK`, `TERPUTUS`) dengan kode warna visual.
+- **Sinkronisasi Otomatis Pasca-ACK**: MCU state otomatis di-refresh melalui `GET,SETUP` setelah setiap eksekusi perintah setup berhasil.
+- **Unit Test Komprehensif**: Pengujian unit otomatis untuk algoritma CRC16-CCITT, parsing paket telemetri normal/korup, serta evaluator kualitas sambungan BLE (`CdiProtocolTest.kt`).
+
+### Versi 7.2.2
 - **Karakter Baru Moge 1800cc Super Bass**: Sintesis audio diperbarui ke irama 850 RPM stasioner slow-chug, subwoofer bass booster 38–75 Hz, kompresi empuk analog, dan saturasi bebas distorsi tajam.
 - **Simulasi Putar Tuas Gas (BLIP)**: Menghadirkan fungsi `triggerThrottleBlip` responsif yang mensimulasikan puntiran gas sekejap (TPS 85%, lonjakan RPM kuadratik, raungan gas, dan inersia kembali ke idle).
 - **Perbaikan Audio Leakage / Hanging Sound**: Menghilangkan persistensi dengung saat volume 0% atau saat beralih dari mode demo ke BLE nyata.

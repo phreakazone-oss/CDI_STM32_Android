@@ -175,6 +175,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     val pulserOffset by viewModel.pulserOffsetDeg.collectAsState()
     val strobeActive by viewModel.strobeActive.collectAsState()
     val flashSaved by viewModel.flashSaved.collectAsState()
+    val setupCommandPending by viewModel.setupCommandPending.collectAsState()
     var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo LED PB9, 1 = Manual Tanpa Strobo (Default)
 
     LazyColumn(
@@ -343,42 +344,30 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Trigger Edge:", fontSize = 11.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(
-                            onClick = { viewModel.setPulserEdge("FALLING") },
-                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text("FALLING (NS200)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.setPulserEdge("RISING") },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text("RISING", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        }
-                    }
-                }
+                PulserAdvancedSettings(viewModel)
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Button(
+                    enabled = !setupCommandPending,
                     onClick = { viewModel.confirmPulserPickup() },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(vertical = 6.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("KONFIRMASI PULSER OK & LANJUT TDC", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    if (setupCommandPending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = CarbonDark
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("MENUNGGU MCU...", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    } else {
+                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = CarbonDark, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("KONFIRMASI PULSER OK & LANJUT TDC", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    }
                 }
             }
         }
@@ -468,6 +457,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                             Text(if (strobeActive) "STROBO ON" else "STROBO OFF", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                         }
                         Button(
+                            enabled = !setupCommandPending,
                             onClick = { viewModel.saveTdcStrobe() },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
@@ -544,6 +534,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
+                        enabled = !setupCommandPending,
                         onClick = { viewModel.saveManualTdc(pulserOffset) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
@@ -582,6 +573,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
+                        enabled = !setupCommandPending,
                         onClick = { viewModel.calibrateTpsClosed() },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
@@ -591,6 +583,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         Text("1. GAS TUTUP (0%)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
                     }
                     Button(
+                        enabled = !setupCommandPending,
                         onClick = { viewModel.calibrateTpsOpen() },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
@@ -623,6 +616,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
+                    enabled = !setupCommandPending,
                     onClick = { viewModel.prepareFirstStartMode() },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
@@ -658,6 +652,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
+                        enabled = !setupCommandPending,
                         onClick = { viewModel.confirmReadyCenterOnly() },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
@@ -667,6 +662,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         Text("READY: CENTER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
                     }
                     Button(
+                        enabled = !setupCommandPending,
                         onClick = { viewModel.confirmReadyTripleSpark(0) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
@@ -677,6 +673,11 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     }
                 }
             }
+        }
+
+        // FAN MODE SETTINGS
+        item {
+            FanModeSettings(viewModel)
         }
 
         // FOOTER ACTIONS: RESET SETUP & GO TO CUSTOM MAP WITH WARNING
@@ -704,6 +705,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
+                            enabled = !setupCommandPending,
                             onClick = { viewModel.resetSetupWorkflow() },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp),
@@ -1255,6 +1257,159 @@ private fun BomShoppingView() {
 
         item {
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun PulserAdvancedSettings(viewModel: CdiViewModel) {
+    val selectedPpr by viewModel.pulserPpr.collectAsState()
+    val selectedGate by viewModel.gateDurationUs.collectAsState()
+    val edge by viewModel.pickupEdge.collectAsState()
+    val setupCommandPending by viewModel.setupCommandPending.collectAsState()
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "PULSER CONFIGURATION",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MotecOrange,
+            fontFamily = FontFamily.Monospace
+        )
+
+        Text("Trigger edge", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("FALLING", "RISING").forEach { item ->
+                FilterChip(
+                    selected = edge == item,
+                    enabled = !setupCommandPending,
+                    onClick = { viewModel.setPulserEdge(item) },
+                    label = {
+                        Text(
+                            text = if (item == "FALLING") "$item (NS200)" else item,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                )
+            }
+        }
+
+        Text("Pulse per revolution: $selectedPpr", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (1..4).forEach { ppr ->
+                FilterChip(
+                    selected = selectedPpr == ppr,
+                    enabled = !setupCommandPending,
+                    onClick = { viewModel.setPulserPpr(ppr) },
+                    label = { Text("$ppr PPR", fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                )
+            }
+        }
+
+        Text("SCR gate pulse: $selectedGate µs", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(60, 80, 100, 120).forEach { gate ->
+                FilterChip(
+                    selected = selectedGate == gate,
+                    enabled = !setupCommandPending,
+                    onClick = { viewModel.setGateDurationUs(gate) },
+                    label = { Text("$gate µs", fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                )
+            }
+        }
+
+        Text(
+            text = "Nilai awal NS200: 1 PPR dan 80 µs. Perubahan PPR mengharuskan kalibrasi TDC ulang.",
+            fontSize = 10.sp,
+            color = TextMuted,
+            fontFamily = FontFamily.Monospace,
+            lineHeight = 13.sp
+        )
+    }
+}
+
+@Composable
+private fun FanModeSettings(viewModel: CdiViewModel) {
+    val fanMode by viewModel.fanMode.collectAsState()
+    val telemetry by viewModel.telemetry.collectAsState()
+    val setupCommandPending by viewModel.setupCommandPending.collectAsState()
+
+    val safeToChange =
+        telemetry.rpm == 0 &&
+        !telemetry.hvEnabled &&
+        telemetry.hvCenter < 30 &&
+        telemetry.hvSide < 30
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "RADIATOR FAN MODE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SensorAmber,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    "Aktif: $fanMode",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = when (fanMode) {
+                        "ON" -> RacingLime
+                        "OFF" -> RaceRedline
+                        else -> ElectricCyan
+                    },
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Text(
+                "Kontrol relai kipas radiator J1.7 (PB5). Mode AUTO menyalakan kipas saat suhu melebihi ambang batas.",
+                fontSize = 10.sp,
+                color = TextSecondary,
+                fontFamily = FontFamily.Monospace
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("OFF", "ON", "AUTO").forEach { mode ->
+                    FilterChip(
+                        selected = fanMode == mode,
+                        enabled = safeToChange && !setupCommandPending,
+                        onClick = { viewModel.setFanMode(mode) },
+                        label = {
+                            Text(
+                                mode,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    )
+                }
+            }
+
+            if (!safeToChange) {
+                Text(
+                    "⚠️ Matikan mesin dan tunggu tegangan HV di bawah 30 V untuk mengubah mode fan.",
+                    color = Color(0xFFFF4444),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
     }
 }
