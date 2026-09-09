@@ -73,7 +73,12 @@ Antarmuka tuning pengapian:
 - **Flash / EEPROM Write**: Pengiriman perintah biner ber-checksum untuk menyimpan kurva permanen ke mikrokontroler CDI.
 
 ### 3. Setup CDI & Kalibrasi TDC
-Tab utama **Setup** membuka alur komisi CDI lengkap. Halaman yang sama juga dapat dibuka melalui **Wiring → Komisi CDI**, sehingga tidak ada lagi dua konfigurasi strobo yang berbeda.
+Tab utama **Setup** mempertahankan layout Strobo lama sebagai tampilan awal agar kalibrasi timing tetap ringkas dan mudah dibaca. Pemilih kecil di atas layar menyediakan dua tampilan fungsional:
+
+- **STROBO TDC**: layout lama berisi kontrol PB9, visual tanda T, offset ±5°, dan penyimpanan TDC ke flash.
+- **TAHAPAN SETUP**: workflow komisi lengkap BARU → PULSER → TDC → TPS → FIRST START → READY.
+
+Menu **Wiring → Komisi CDI** tetap langsung membuka layout Quick Setup lama. Semua akses memakai instance `CdiViewModel` yang sama, sehingga nilai tahap, telemetry, pending command dan ACK MCU selalu sinkron.
 
 Kalibrasi mekanikal sensor pick-up:
 - **Sinkronisasi Lampu Strobo**: Menyalakan pulsa strobo tetap pada sudut pengapian statis untuk pembacaan timing light pada tanda magnet kruk as.
@@ -110,7 +115,7 @@ Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULS
 
 #### Cara konfigurasi awal melalui menu Setup
 
-Alur ini dapat dibuka dari dua tempat: tab utama **Setup**, atau **Wiring → Komisi CDI**. Keduanya menggunakan `CdiViewModel` dan status MCU yang sama; perubahan pada salah satu halaman langsung terlihat pada halaman lainnya.
+Alur ini dapat dibuka dari tab utama **Setup → TAHAPAN SETUP**, atau langsung melalui **Wiring → Komisi CDI**. Tab **Setup → STROBO TDC** menampilkan layout strobo lama. Ketiga jalur menggunakan `CdiViewModel` dan status MCU yang sama; perubahan pada satu tampilan langsung terlihat pada tampilan lain.
 
 > **Bahaya tegangan tinggi:** kapasitor CDI dapat menyimpan ratusan volt. Pasang atau lepas `JP_HV` hanya saat kontak/kill switch OFF dan pembacaan HV CENTER serta SIDE sudah di bawah 30 V.
 
@@ -121,7 +126,7 @@ Alur ini dapat dibuka dari dua tempat: tab utama **Setup**, atau **Wiring → Ko
    - Buka menu BLE dan hubungkan `NS200-CDI-R7` tanpa melakukan pairing/PIN Android. Tunggu status `GATT READY`.
 
 2. **Tahap 1 — BARU / pemeriksaan komunikasi**
-   - Buka menu **Setup** dan tekan `PERIKSA & LANJUT KE TAHAP 2`.
+   - Buka **Setup → TAHAPAN SETUP** atau **Wiring → Komisi CDI**, lalu tekan `PERIKSA & LANJUT KE TAHAP 2`.
    - Aplikasi memeriksa tiga respons secara berurutan: `PING`, `GET,STATUS`, dan `GET,SETUP`.
    - Hasil lulus membutuhkan ketiga respons diterima, RPM = 0, HV CENTER <30 V, dan HV SIDE <30 V.
    - Jika `PACKET RATE` masih 0 Hz tetapi tiga respons lulus, kanal kontrol 1003 bekerja namun notifikasi Telemetry 1001 belum masuk. Tahap PULSER dapat dibuka, tetapi jangan mengonfirmasi pulser sebelum nilai RPM/quality sudah terbaca.
@@ -133,7 +138,7 @@ Alur ini dapat dibuka dari dua tempat: tab utama **Setup**, atau **Wiring → Ko
    - Setelah sinyal stabil, lepaskan starter dan tekan `KONFIRMASI PULSER OK & LANJUT TDC`. Tunggu ACK MCU.
 
 4. **Tahap 3 — TDC / STROBO**
-   - Kontrol strobo sekarang berada di tahap TDC pada menu Setup; tidak ada menu strobo kedua.
+   - Dari menu utama pilih **Setup → STROBO TDC** untuk memakai layout strobo lama. Tahap TDC di Quick Setup juga membaca dan menulis state kalibrasi MCU yang sama.
    - Pilih `DENGAN STROBO LED` untuk pengukuran yang dianjurkan. Hubungkan driver lampu timing ke PB9 sesuai Wiring, aktifkan strobo, lalu arahkan lampu ke jendela timing.
    - Putar starter dan geser offset sedikit demi sedikit sampai tanda `T` tampak diam serta tepat sejajar dengan garis crankcase.
    - Lepaskan starter. Setelah RPM kembali 0 dan HV tetap <30 V, tekan `SIMPAN TDC STROBO` dan tunggu ACK `TDC_SAVED`.

@@ -147,9 +147,7 @@ fun MainAppScreen(
                     wiringViewModel = wiringViewModel,
                     cdiViewModel = cdiViewModel
                 )
-                // Satu flow yang sama juga dibuka dari Wiring -> Komisi CDI.
-                // Kontrol strobo berada pada tahap TDC agar tidak ada dua setup berbeda.
-                ScreenTab.SETUP -> QuickSetupGuideScreen(cdiViewModel)
+                ScreenTab.SETUP -> SetupScreen(cdiViewModel)
                 ScreenTab.SUARA -> SoundScreen(cdiViewModel)
                 ScreenTab.BLE -> BleHexScreen(
                     viewModel = cdiViewModel,
