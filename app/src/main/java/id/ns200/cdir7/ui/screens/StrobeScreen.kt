@@ -34,6 +34,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
     val pulserOffset by viewModel.pulserOffsetDeg.collectAsState()
     val flashSaved by viewModel.flashSaved.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
+    val setupCommandPending by viewModel.setupCommandPending.collectAsState()
     val scrollState = rememberScrollState()
 
     // Strobe flash visual effect animation
@@ -328,7 +329,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // TOMBOL SIMPAN KE FLASH 0x0807E000 (SEKTOR 63 STM32WB55)
+        // Satu-satunya aksi simpan TDC. Firmware memilih halaman flash A/B.
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -355,14 +356,14 @@ fun StrobeScreen(viewModel: CdiViewModel) {
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "SIMPAN KE FLASH 0x0807E000",
+                            text = "SIMPAN KALIBRASI TDC",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace,
                             color = if (flashSaved) RacingLime else TextPrimary
                         )
                         Text(
-                            text = "Sektor 63 Memori Non-Volatile STM32WB55",
+                            text = "Flash A/B otomatis • 0x0807E000 / 0x0807F000",
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace,
                             color = TextSecondary
@@ -372,7 +373,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Merekam sudut trigger ke flash. Status READY hanya diberikan setelah seluruh Quick Setup dan FIRST START berhasil.",
+                    text = "Merekam sudut trigger ke flash redundan. Setelah ACK MCU, Setup otomatis lanjut ke TPS; status READY diberikan setelah FIRST START selesai.",
                     fontSize = 11.sp,
                     color = TextMuted,
                     fontFamily = FontFamily.Monospace
@@ -382,6 +383,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
 
                 Button(
                     onClick = { viewModel.saveCalibrationToFlash() },
+                    enabled = !setupCommandPending,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -391,8 +393,20 @@ fun StrobeScreen(viewModel: CdiViewModel) {
                     ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
+                    if (setupCommandPending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = CarbonDark
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                    }
                     Text(
-                        text = if (flashSaved) "TERSIMPAN PERMANEN DI FLASH 0x0807E000" else "REKAM KALIBRASI KE FLASH SEKTOR 63",
+                        text = when {
+                            setupCommandPending -> "MENUNGGU ACK MCU..."
+                            flashSaved -> "TDC TERSIMPAN DI FLASH A/B"
+                            else -> "SIMPAN TDC & LANJUT KE TPS"
+                        },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = CarbonDark,

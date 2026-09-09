@@ -502,7 +502,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     Text(
                         text = "• Kalibrasi tanpa strobo menggunakan offset manual terukur.\n" +
                                 "• 60.0° adalah nilai awal konservatif firmware, bukan hasil ukur final motor Anda.\n" +
-                                "• Nilai akan disimpan permanen ke Sektor 63 Flash MCU (0x0807E000).",
+                                "• Nilai disimpan redundan ke flash A/B (0x0807E000 / 0x0807F000).",
                         fontSize = 11.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace,
@@ -670,7 +670,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             ) {
                 Text(
                     text = "• Mesin hidup stabil >= 3 detik. Siap operasi jalan penuh.\n" +
-                            "• Pilih mode koil lalu simpan konfigurasi permanen ke Flash Sektor 63.\n" +
+                            "• Pilih mode koil lalu simpan konfigurasi permanen ke flash A/B.\n" +
                             "• Boot CDI berikutnya langsung memakai kalibrasi tanpa perlu setup ulang.",
                     fontSize = 11.sp,
                     color = TextSecondary,
@@ -1294,7 +1294,7 @@ private fun BomShoppingView() {
 }
 
 @Composable
-private fun PulserAdvancedSettings(viewModel: CdiViewModel) {
+fun PulserAdvancedSettings(viewModel: CdiViewModel) {
     val selectedPpr by viewModel.pulserPpr.collectAsState()
     val selectedGate by viewModel.gateDurationUs.collectAsState()
     val edge by viewModel.pickupEdge.collectAsState()

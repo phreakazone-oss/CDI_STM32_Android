@@ -1052,9 +1052,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
         val triggerCdeg = candidateTriggerCdeg(_pulserOffsetDeg.value)
         if (bleClient.gattReady) {
+            _flashSaved.value = false
+            markSetupCommandPending()
             if (_strobeActive.value) bleClient.send("SETUP,SAVE_TDC")
             else bleClient.send("SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
-            bleClient.send("GET,SETUP")
             appendLog("BLE: simpan sudut absolut ${triggerCdeg / 100f}° -> Flash")
         } else if (_isSimulationMode.value) {
             appendLog("Simulasi: kalibrasi lokal ${_pulserOffsetDeg.value}°")
@@ -1069,7 +1070,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
         triggerEditBaseCdeg = triggerCdeg
         _pulserOffsetDeg.value = 0f
-        _flashSaved.value = !bleClient.gattReady
+        if (!bleClient.gattReady) _flashSaved.value = true
         Toast.makeText(context, if (bleClient.gattReady) "Perintah simpan kalibrasi masuk antrean MCU" else "Kalibrasi simulasi tersimpan lokal", Toast.LENGTH_LONG).show()
         return true
     }
@@ -1141,7 +1142,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("SETUP,SAVE_TDC")
             appendLog("BLE Send: SETUP,SAVE_TDC (TDC Strobo disimpan ke Flash)")
         } else {
-            appendLog("TDC Strobo disimpan ke Flash Sektor 63. Lanjut ke TPS.")
+            appendLog("TDC Strobo disimpan ke Flash A/B. Lanjut ke TPS.")
             advanceSetupStage(SetupStage.TPS_CAL.code)
         }
         _flashSaved.value = !bleClient.gattReady
