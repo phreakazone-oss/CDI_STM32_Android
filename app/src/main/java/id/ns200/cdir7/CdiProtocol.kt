@@ -44,6 +44,26 @@ object CdiProtocol {
     const val KIND_CORE = 0
     const val KIND_DIAGNOSTIC = 1
 
+    /**
+     * Firmware R7 menyimpan 5 tahap (0..4), sedangkan aplikasi menampilkan
+     * 6 halaman karena kalibrasi TPS dibuat sebagai langkah tersendiri.
+     * Jangan pernah menampilkan angka tahap firmware secara langsung sebagai
+     * SetupStage aplikasi.
+     */
+    fun wizardStageFromFirmware(
+        firmwareStage: Int,
+        tpsClosedAdc: Int,
+        tpsOpenAdc: Int
+    ): Int = when {
+        firmwareStage >= 4 -> SetupStage.READY.code
+        firmwareStage == 3 -> SetupStage.FIRST_START.code
+        firmwareStage == 2 && tpsOpenAdc > tpsClosedAdc + 50 ->
+            SetupStage.FIRST_START.code
+        firmwareStage == 2 -> SetupStage.TPS_CAL.code
+        firmwareStage == 1 -> SetupStage.TDC.code
+        else -> SetupStage.BARU.code
+    }
+
     fun emptyTelemetry() = Telemetry(0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, SetupStage.BARU.code, 0, 6000, 0, 0)
 

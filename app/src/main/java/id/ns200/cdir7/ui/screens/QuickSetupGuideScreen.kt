@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -176,10 +177,21 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     val strobeActive by viewModel.strobeActive.collectAsState()
     val flashSaved by viewModel.flashSaved.collectAsState()
     val setupCommandPending by viewModel.setupCommandPending.collectAsState()
+    val quickSetupPage by viewModel.quickSetupPage.collectAsState()
+    val quickSetupUnlockedStage by viewModel.quickSetupUnlockedStage.collectAsState()
+    val preflightBusy by viewModel.quickSetupPreflightBusy.collectAsState()
+    val preflightMessage by viewModel.quickSetupMessage.collectAsState()
+    val listState = rememberLazyListState()
+    val visibleProgress = maxOf(t.setupStage, quickSetupUnlockedStage)
     var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo LED PB9, 1 = Manual Tanpa Strobo (Default)
+
+    LaunchedEffect(quickSetupPage) {
+        listState.animateScrollToItem((2 + quickSetupPage).coerceIn(2, 7))
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // TOP SAFETY & INTERLOCK STATUS BAR
@@ -275,9 +287,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 1,
                 title = "BARU : Verifikasi Baterai & Komunikasi BLE",
-                isCurrent = t.setupStage == SetupStage.BARU.code,
-                isDone = t.setupStage > SetupStage.BARU.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.BARU.code) }
+                isCurrent = quickSetupPage == SetupStage.BARU.code,
+                isDone = visibleProgress > SetupStage.BARU.code,
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.BARU.code) }
             ) {
                 Text(
                     text = "• Sebelum mulai: kill switch OFF harus membuat J1.5 = 0V.\n" +
@@ -313,14 +325,33 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Button(
-                    onClick = { viewModel.advanceSetupStage(SetupStage.PULSER.code) },
+                    enabled = !preflightBusy,
+                    onClick = { viewModel.startQuickSetupPreflight() },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(vertical = 6.dp)
                 ) {
-                    Text("LANJUT KE TAHAP 2 (PULSER)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    if (preflightBusy) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = CarbonDark)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("MENUNGGU 3 RESPONS MCU...", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    } else {
+                        Text("PERIKSA & LANJUT KE TAHAP 2", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                    }
                 }
+                Spacer(modifier = Modifier.height(7.dp))
+                Text(
+                    text = preflightMessage,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = when {
+                        preflightMessage.startsWith("LULUS") -> RacingLime
+                        preflightMessage.startsWith("GAGAL") -> RaceRedline
+                        else -> ElectricCyan
+                    }
+                )
             }
         }
 
@@ -329,9 +360,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 2,
                 title = "PULSER : Pengujian Sensor Pick-up Magnet",
-                isCurrent = t.setupStage == SetupStage.PULSER.code,
-                isDone = t.setupStage > SetupStage.PULSER.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.PULSER.code) }
+                isCurrent = quickSetupPage == SetupStage.PULSER.code,
+                isDone = visibleProgress > SetupStage.PULSER.code,
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.PULSER.code) }
             ) {
                 Text(
                     text = "• Hubungkan kabel pulser putih-merah (J1.10) via LM339 ke pin PA0.\n" +
@@ -377,9 +408,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 3,
                 title = "TDC : Kalibrasi Titik Mati Atas (OPSIONAL STROBO)",
-                isCurrent = t.setupStage == SetupStage.TDC.code,
-                isDone = t.setupStage > SetupStage.TDC.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.TDC.code) }
+                isCurrent = quickSetupPage == SetupStage.TDC.code,
+                isDone = visibleProgress > SetupStage.TDC.code,
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.TDC.code) }
             ) {
                 // Choice selector between Strobe vs Manual
                 Row(
@@ -554,9 +585,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 4,
                 title = "TPS_CAL : Kalibrasi Gas Tertutup & Penuh",
-                isCurrent = t.setupStage == SetupStage.TPS_CAL.code,
-                isDone = t.setupStage > SetupStage.TPS_CAL.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.TPS_CAL.code) }
+                isCurrent = quickSetupPage == SetupStage.TPS_CAL.code,
+                isDone = visibleProgress > SetupStage.TPS_CAL.code,
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.TPS_CAL.code) }
             ) {
                 Text(
                     text = "• Mesin dalam kondisi MATI, kunci kontak ON.\n" +
@@ -601,9 +632,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 5,
                 title = "FIRST_START : Uji Mesin Hidup Pertama",
-                isCurrent = t.setupStage == SetupStage.FIRST_START.code,
-                isDone = t.setupStage > SetupStage.FIRST_START.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.FIRST_START.code) }
+                isCurrent = quickSetupPage == SetupStage.FIRST_START.code,
+                isDone = visibleProgress > SetupStage.FIRST_START.code,
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.FIRST_START.code) }
             ) {
                 Text(
                     text = "• Pastikan R_ARM 1k terpasang ke PB3, lalu pasang jumper JP_HV.\n" +
@@ -633,9 +664,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             StageCard(
                 stageNumber = 6,
                 title = "READY : Operasi Penuh Normal & Simpan Permanen",
-                isCurrent = t.setupStage == SetupStage.READY.code,
+                isCurrent = quickSetupPage == SetupStage.READY.code,
                 isDone = t.setupStage >= SetupStage.READY.code,
-                onSelectStage = { viewModel.advanceSetupStage(SetupStage.READY.code) }
+                onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.READY.code) }
             ) {
                 Text(
                     text = "• Mesin hidup stabil >= 3 detik. Siap operasi jalan penuh.\n" +
@@ -749,6 +780,7 @@ private fun StageCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onSelectStage)
             .border(
                 1.5.dp,
                 when {

@@ -72,6 +72,8 @@ fun BleHexScreen(
     val rawPacket by viewModel.rawPacket.collectAsState()
     val packetRate by viewModel.packetRateHz.collectAsState()
     val crcPercent by viewModel.crcValidPercent.collectAsState()
+    val telemetryPacketCount by viewModel.telemetryPacketCount.collectAsState()
+    val telemetryRxMessage by viewModel.telemetryRxMessage.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val logs by viewModel.terminalLogs.collectAsState()
 
@@ -116,7 +118,10 @@ fun BleHexScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isConnected) "BLE ONLINE • $packetRate Hz • ${linkQuality.label}" else "BLE OFFLINE",
+                            text = if (isConnected) {
+                                if (telemetryPacketCount < 2L) "BLE ONLINE • TELEMETRY MENUNGGU"
+                                else "BLE ONLINE • $packetRate Hz • ${linkQuality.label}"
+                            } else "BLE OFFLINE",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -187,10 +192,15 @@ fun BleHexScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     GattSpecRow("SERVICE UUID", "7a8f1000-6c9d-4e40-a45f-0b4b4e533230")
-                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${packetRate} Hz • ${linkQuality.label} • v3 20 Bytes)")
+                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${telemetryPacketCount} frame • ${packetRate} Hz • v3 20 Bytes)")
                     GattSpecRow("COMMAND CHAR", "7a8f1002-... (Write + ACK queue: $pending)")
                     GattSpecRow("RESPONSE CHAR", "7a8f1003-... (Notify ASCII Stream)")
-                    GattSpecRow("CRC16 INTEGRITY", "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label))
+                    GattSpecRow(
+                        "CRC16 INTEGRITY",
+                        if (telemetryPacketCount == 0L) "BELUM ADA FRAME UNTUK DIPERIKSA"
+                        else "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label)
+                    )
+                    GattSpecRow("TELEMETRY RX", telemetryRxMessage)
                 }
             }
         }

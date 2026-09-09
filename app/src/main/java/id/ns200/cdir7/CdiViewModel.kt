@@ -98,12 +98,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _crcValidPercent = MutableStateFlow(0f)
     val crcValidPercent: StateFlow<Float> = _crcValidPercent.asStateFlow()
 
+    private val _telemetryPacketCount = MutableStateFlow(0L)
+    val telemetryPacketCount: StateFlow<Long> = _telemetryPacketCount.asStateFlow()
+
+    private val _telemetryRxMessage = MutableStateFlow("OFFLINE • belum berlangganan Telemetry 1001")
+    val telemetryRxMessage: StateFlow<String> = _telemetryRxMessage.asStateFlow()
+
     private data class RxSample(
         val timestampMs: Long,
         val valid: Boolean
     )
     private val rxSamples = ArrayDeque<RxSample>()
     private val RX_WINDOW_MS = 5_000L
+    private var telemetryWatchdogJob: Job? = null
 
     // Setup StateFlows (Synchronized from GET,SETUP)
     private val _pickupEdge = MutableStateFlow("FALLING")
@@ -133,6 +140,32 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _setupCommandPending = MutableStateFlow(false)
     val setupCommandPending: StateFlow<Boolean> = _setupCommandPending.asStateFlow()
 
+    // Tahap mentah yang benar-benar tersimpan di firmware: 0..4.
+    private val _firmwareSetupStage = MutableStateFlow(0)
+    val firmwareSetupStage: StateFlow<Int> = _firmwareSetupStage.asStateFlow()
+
+    // Halaman wizard aplikasi: 0..5. Terpisah dari state permanen firmware.
+    private val _quickSetupPage = MutableStateFlow(SetupStage.BARU.code)
+    val quickSetupPage: StateFlow<Int> = _quickSetupPage.asStateFlow()
+
+    private val _quickSetupUnlockedStage = MutableStateFlow(SetupStage.BARU.code)
+    val quickSetupUnlockedStage: StateFlow<Int> = _quickSetupUnlockedStage.asStateFlow()
+
+    private val _quickSetupPreflightBusy = MutableStateFlow(false)
+    val quickSetupPreflightBusy: StateFlow<Boolean> = _quickSetupPreflightBusy.asStateFlow()
+
+    private val _quickSetupMessage = MutableStateFlow(
+        "Tekan PERIKSA & LANJUT. Aplikasi akan memeriksa PING, STATUS, dan SETUP dari MCU."
+    )
+    val quickSetupMessage: StateFlow<String> = _quickSetupMessage.asStateFlow()
+
+    private var preflightPingOk = false
+    private var preflightStatusOk = false
+    private var preflightSetupOk = false
+    private var preflightTimeoutJob: Job? = null
+    private var lastTelemetryPacketAtMs = 0L
+    private var setupSyncedThisConnection = false
+
     private var pendingTimeoutJob: Job? = null
 
     private fun markSetupCommandPending() {
@@ -156,6 +189,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         rxSamples.clear()
         _packetRateHz.value = 0
         _crcValidPercent.value = 0f
+        _telemetryPacketCount.value = 0L
+        lastTelemetryPacketAtMs = SystemClock.elapsedRealtime()
+        telemetryWatchdogJob?.cancel()
+        _telemetryRxMessage.value = if (_isConnected.value) {
+            "MENUNGGU • notifikasi Telemetry 1001 belum diterima"
+        } else {
+            "OFFLINE • belum berlangganan Telemetry 1001"
+        }
     }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
@@ -316,6 +357,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _pulserOffsetDeg.value = prefs.getFloat("pulser_offset", 0.0f)
         _softRevLimiterRpm.value = prefs.getInt("rev_limiter", 9800)
         val savedStage = prefs.getInt("setup_stage", SetupStage.BARU.code)
+            .coerceIn(SetupStage.BARU.code, SetupStage.READY.code)
+        _quickSetupPage.value = savedStage
+        _quickSetupUnlockedStage.value = savedStage
         _telemetry.value = _telemetry.value.copy(
             setupStage = savedStage,
             flags = if (savedStage == SetupStage.READY.code) (_telemetry.value.flags or 0x28) else _telemetry.value.flags,
@@ -818,6 +862,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             return
         }
         appendLog("Simulasi: tahap lokal berubah ke ${target.label}")
+        _quickSetupPage.value = target.code
+        _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, target.code)
 
         // Update local telemetry stage
         val currentT = _telemetry.value
@@ -841,6 +887,109 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
             .putInt("setup_stage", target.code)
             .apply()
+    }
+
+    fun selectQuickSetupPage(targetStageCode: Int) {
+        val target = SetupStage.entries.find { it.code == targetStageCode } ?: return
+        val unlockedThrough = maxOf(_telemetry.value.setupStage, _quickSetupUnlockedStage.value)
+        if (target.code > unlockedThrough) {
+            _quickSetupMessage.value =
+                "Tahap ${target.code + 1} masih terkunci. Selesaikan tahap ${unlockedThrough + 1} terlebih dahulu."
+            appendLog("Wizard: ${target.label} masih terkunci")
+            return
+        }
+        _quickSetupPage.value = target.code
+    }
+
+    fun startQuickSetupPreflight() {
+        if (_isSimulationMode.value) {
+            _quickSetupPage.value = SetupStage.PULSER.code
+            _quickSetupUnlockedStage.value = maxOf(
+                _quickSetupUnlockedStage.value,
+                SetupStage.PULSER.code
+            )
+            _quickSetupMessage.value = "DEMO LULUS • halaman PULSER dibuka tanpa mengubah flash MCU."
+            return
+        }
+        if (!bleClient.gattReady) {
+            _quickSetupMessage.value = "GAGAL • GATT belum READY. Hubungkan CDI lewat menu BLE terlebih dahulu."
+            appendLog("Quick Setup preflight ditolak: GATT belum READY")
+            return
+        }
+
+        preflightPingOk = false
+        preflightStatusOk = false
+        preflightSetupOk = false
+        _quickSetupPreflightBusy.value = true
+        _quickSetupMessage.value = "MEMERIKSA • menunggu PING + STATUS + SETUP dari MCU..."
+        preflightTimeoutJob?.cancel()
+
+        val queued = bleClient.send("PING") &&
+            bleClient.send("GET,STATUS") &&
+            bleClient.send("GET,SETUP")
+        if (!queued) {
+            failQuickSetupPreflight("Perintah tidak dapat masuk antrean GATT.")
+            return
+        }
+
+        appendLog("Quick Setup preflight: PING, GET STATUS, GET SETUP")
+        preflightTimeoutJob = viewModelScope.launch {
+            delay(10_000)
+            if (_quickSetupPreflightBusy.value) {
+                val missing = buildList {
+                    if (!preflightPingOk) add("PING")
+                    if (!preflightStatusOk) add("STATUS")
+                    if (!preflightSetupOk) add("SETUP")
+                }.joinToString(" + ")
+                failQuickSetupPreflight("Timeout; respons belum diterima: $missing.")
+            }
+        }
+    }
+
+    private fun finishQuickSetupPreflightIfReady() {
+        if (!_quickSetupPreflightBusy.value ||
+            !preflightPingOk || !preflightStatusOk || !preflightSetupOk) return
+
+        val t = _telemetry.value
+        when {
+            t.rpm > 0 -> failQuickSetupPreflight(
+                "RPM masih ${t.rpm}. Matikan mesin; tahap awal hanya diperiksa saat RPM 0."
+            )
+            t.hvCenter >= 30 || t.hvSide >= 30 -> failQuickSetupPreflight(
+                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Lepas JP_HV dan tunggu <30 V."
+            )
+            else -> {
+                preflightTimeoutJob?.cancel()
+                _quickSetupPreflightBusy.value = false
+                _quickSetupPage.value = SetupStage.PULSER.code
+                _quickSetupUnlockedStage.value = maxOf(
+                    _quickSetupUnlockedStage.value,
+                    SetupStage.PULSER.code
+                )
+                _quickSetupMessage.value = if (_telemetryPacketCount.value == 0L) {
+                    "LULUS KONTROL • PING/STATUS/SETUP valid. Telemetry 1001 belum masuk; lanjut ke PULSER, tetapi quality/RPM belum dapat dipantau."
+                } else {
+                    "LULUS • MCU merespons, HV <30 V, RPM 0, dan Telemetry 1001 aktif. Tahap 2 dibuka."
+                }
+                appendLog("Quick Setup preflight LULUS; halaman PULSER dibuka")
+            }
+        }
+    }
+
+    private fun updateQuickSetupPreflightProgress() {
+        if (!_quickSetupPreflightBusy.value) return
+        fun mark(ok: Boolean) = if (ok) "OK" else "MENUNGGU"
+        _quickSetupMessage.value =
+            "MEMERIKSA • PING ${mark(preflightPingOk)} | " +
+                "STATUS ${mark(preflightStatusOk)} | SETUP ${mark(preflightSetupOk)}"
+        finishQuickSetupPreflightIfReady()
+    }
+
+    private fun failQuickSetupPreflight(reason: String) {
+        preflightTimeoutJob?.cancel()
+        _quickSetupPreflightBusy.value = false
+        _quickSetupMessage.value = "GAGAL • $reason"
+        appendLog("Quick Setup preflight GAGAL: $reason")
     }
 
     fun toggleConfirmPin(pin: String) {
@@ -1155,18 +1304,41 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _connectionStatus.value = text
         _isConnected.value = connected
         if (connected) {
+            setupSyncedThisConnection = false
             _isSimulationMode.value = false
             _isRevving.value = false
             _demoThrottleSlider.value = 0f
             simRpm = 0f
             simTps = 0f
             engineSound.stop()
+            resetBleStatistics()
+            telemetryWatchdogJob = viewModelScope.launch {
+                while (_isConnected.value) {
+                    delay(1_000)
+                    val now = SystemClock.elapsedRealtime()
+                    when {
+                        _telemetryPacketCount.value == 0L && now - lastTelemetryPacketAtMs >= 3_000L -> {
+                            _telemetryRxMessage.value =
+                                "TIDAK ADA FRAME • Response 1003 dapat hidup walau Telemetry 1001 tidak notify"
+                        }
+                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 1_500L -> {
+                            _packetRateHz.value = 0
+                            _telemetryRxMessage.value =
+                                "TELEMETRY TERHENTI • tidak ada frame baru selama ${(now - lastTelemetryPacketAtMs) / 1000}s"
+                        }
+                    }
+                }
+            }
             bleClient.send("GET,STATUS")
             bleClient.send("GET,META")
             bleClient.send("GET,SETUP")
         } else {
+            setupSyncedThisConnection = false
             resetBleStatistics()
             clearSetupCommandPending()
+            if (_quickSetupPreflightBusy.value) {
+                failQuickSetupPreflight("Koneksi BLE terputus.")
+            }
         }
         appendLog("BLE: $text")
     }
@@ -1204,13 +1376,21 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onRawPacket(bytes: ByteArray) {
         _rawPacket.value = bytes
+        _telemetryPacketCount.value += 1L
 
         val now = SystemClock.elapsedRealtime()
+        lastTelemetryPacketAtMs = now
 
         val valid = CdiProtocol.telemetry(
             packet = bytes,
             previous = _telemetry.value
         ) != null
+
+        _telemetryRxMessage.value = if (valid) {
+            "AKTIF • frame #${_telemetryPacketCount.value} dari Telemetry 1001"
+        } else {
+            "FRAME DITOLAK • panjang/versi/header/CRC tidak valid (${bytes.size} byte)"
+        }
 
         rxSamples.addLast(RxSample(now, valid))
 
@@ -1228,19 +1408,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             if (total == 0) 0f
             else validCount * 100f / total
 
-        val validSamples = rxSamples.filter { it.valid }
-
         _packetRateHz.value =
-            if (validSamples.size < 2) {
+            if (rxSamples.size < 2) {
                 0
             } else {
                 val duration =
-                    validSamples.last().timestampMs -
-                        validSamples.first().timestampMs
+                    rxSamples.last().timestampMs -
+                        rxSamples.first().timestampMs
 
                 if (duration <= 0L) 0
                 else (
-                    (validSamples.size - 1) * 1000f / duration
+                    (rxSamples.size - 1) * 1000f / duration
                 ).roundToInt()
             }
     }
@@ -1266,6 +1444,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     hvSide = f[4].toIntOrNull() ?: _telemetry.value.hvSide,
                     slot = slot
                 )
+                preflightStatusOk = true
+                updateQuickSetupPreflightProgress()
             }
             "META" -> if (f.size >= 10) {
                 _limiterType.value = if (f[3].toIntOrNull() == 1) "HARD" else "SOFT"
@@ -1289,8 +1469,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             "SETUP" -> if (f.size >= 14) {
-                val stage = f[1].toIntOrNull()?.coerceIn(0, 5)
-                    ?: _telemetry.value.setupStage
+                val firmwareStage = f[1].toIntOrNull()?.coerceIn(0, 4)
+                    ?: _firmwareSetupStage.value
 
                 val edgeCode = f[2].toIntOrNull() ?: 0
                 val trigger = f[3].toIntOrNull()
@@ -1307,6 +1487,28 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val side = f[11].toIntOrNull() == 1
                 val fanCode = f[12].toIntOrNull() ?: 2
                 val quality = f[13].toIntOrNull() ?: 0
+                val wizardStage = CdiProtocol.wizardStageFromFirmware(
+                    firmwareStage = firmwareStage,
+                    tpsClosedAdc = tpsClosed,
+                    tpsOpenAdc = tpsOpen
+                )
+
+                _firmwareSetupStage.value = firmwareStage
+                if (!setupSyncedThisConnection) {
+                    // Firmware adalah sumber kebenaran setelah koneksi baru;
+                    // jangan biarkan cache aplikasi lama memalsukan READY.
+                    _quickSetupPage.value = wizardStage
+                    _quickSetupUnlockedStage.value = wizardStage
+                    setupSyncedThisConnection = true
+                } else {
+                    _quickSetupUnlockedStage.value = maxOf(
+                        _quickSetupUnlockedStage.value,
+                        wizardStage
+                    )
+                    if (wizardStage > _quickSetupPage.value) {
+                        _quickSetupPage.value = wizardStage
+                    }
+                }
 
                 _pickupEdge.value =
                     if (edgeCode == 1) "RISING" else "FALLING"
@@ -1325,7 +1527,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
 
                 _telemetry.value = _telemetry.value.copy(
-                    setupStage = stage,
+                    setupStage = wizardStage,
                     triggerCdeg = trigger,
                     outputFlags =
                         (if (center) 1 else 0) or
@@ -1338,7 +1540,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     "cdi_r7_prefs",
                     Context.MODE_PRIVATE
                 ).edit()
-                    .putInt("setup_stage", stage)
+                    .putInt("setup_stage", wizardStage)
                     .apply()
 
                 if (!_strobeActive.value && _pulserOffsetDeg.value == 0f) {
@@ -1346,13 +1548,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
 
                 appendLog(
-                    "SETUP sync: stage=$stage edge=${_pickupEdge.value} " +
+                    "SETUP sync: MCU=$firmwareStage wizard=$wizardStage edge=${_pickupEdge.value} " +
                         "PPR=$ppr gate=${gateUs}us fan=${_fanMode.value}"
                 )
+                preflightSetupOk = true
+                updateQuickSetupPreflightProgress()
             }
             "ACK" -> {
                 clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
+                if (operation == "PONG_R7_2") {
+                    preflightPingOk = true
+                    updateQuickSetupPreflightProgress()
+                }
                 if (operation == "TDC_SAVED" || operation == "TDC_MANUAL_SAVED")
                     _flashSaved.value = true
                 if (operation !in setOf("LIVE", "OFFSET", "PONG_R7_2"))
@@ -1375,6 +1583,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
                 when {
                     operation in setupChangingOperations -> {
+                        if (operation == "SETUP_RESET") {
+                            _quickSetupPage.value = SetupStage.BARU.code
+                            _quickSetupUnlockedStage.value = SetupStage.BARU.code
+                            _firmwareSetupStage.value = 0
+                        }
                         refreshSetupAfterAck()
                     }
 
