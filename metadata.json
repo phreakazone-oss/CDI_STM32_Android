@@ -1,0 +1,6 @@
+{
+  "name": "NS200 CDI R7.2",
+  "description": "Aplikasi kontrol CDI Programmable Pulsar NS200 R7.2 terpadu: Dashboard balap MoTeC, Kurva Pengapian 4 Slot, Bengkel Solder & Wiring interaktif, Kalibrasi Strobo TDC, Simulator Suara Mesin, dan koneksi BLE ultra-stabil.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
