@@ -46,6 +46,8 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val connectionStatus by viewModel.connectionStatus.collectAsState()
     val packetRate by viewModel.packetRateHz.collectAsState()
     val crcPercent by viewModel.crcValidPercent.collectAsState()
+    val telemetryPacketCount by viewModel.telemetryPacketCount.collectAsState()
+    val telemetryRxMessage by viewModel.telemetryRxMessage.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
@@ -758,7 +760,11 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     )
                     TechDataRow(
                         "PACKET RATE",
-                        if (isConnected) "$packetRate Hz (Stabil: 18-22 Hz)" else "0 Hz (STANDBY)",
+                        when {
+                            !isConnected -> "0 Hz (OFFLINE)"
+                            telemetryPacketCount < 2L -> "MENUNGGU (${telemetryPacketCount} frame)"
+                            else -> "$packetRate Hz (target 18-22 Hz)"
+                        },
                         when {
                             !isConnected || packetRate == 0 -> TextMuted
                             packetRate in 18..22 -> RacingLime
@@ -768,12 +774,26 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     )
                     TechDataRow(
                         "CRC VALID",
-                        if (isConnected && packetRate > 0) "%.1f%% VALID".format(crcPercent) else "N/A (STANDBY)",
+                        when {
+                            !isConnected -> "OFFLINE"
+                            telemetryPacketCount == 0L -> "BELUM ADA FRAME"
+                            else -> "%.1f%% VALID".format(crcPercent)
+                        },
                         when {
                             !isConnected || packetRate == 0 -> TextMuted
                             crcPercent >= 99f -> RacingLime
                             crcPercent >= 95f -> MotecOrange
                             else -> RaceRedline
+                        }
+                    )
+                    TechDataRow(
+                        "TELEMETRY RX",
+                        telemetryRxMessage,
+                        when {
+                            !isConnected -> TextMuted
+                            telemetryPacketCount == 0L -> RaceRedline
+                            crcPercent >= 99f -> RacingLime
+                            else -> MotecOrange
                         }
                     )
                     TechDataRow("SETUP STAGE", "${telemetry.stage.name} (${telemetry.stage.label})", when (telemetry.setupStage) {

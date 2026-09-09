@@ -135,4 +135,14 @@ class CdiProtocolTest {
             )
         )
     }
+
+    @Test
+    fun firmwareSetupStageMapsToSixPageWizard() {
+        assertEquals(SetupStage.BARU.code, CdiProtocol.wizardStageFromFirmware(0, 0, 0))
+        assertEquals(SetupStage.TDC.code, CdiProtocol.wizardStageFromFirmware(1, 0, 0))
+        assertEquals(SetupStage.TPS_CAL.code, CdiProtocol.wizardStageFromFirmware(2, 640, 0))
+        assertEquals(SetupStage.FIRST_START.code, CdiProtocol.wizardStageFromFirmware(2, 640, 3200))
+        assertEquals(SetupStage.FIRST_START.code, CdiProtocol.wizardStageFromFirmware(3, 640, 3200))
+        assertEquals(SetupStage.READY.code, CdiProtocol.wizardStageFromFirmware(4, 640, 3200))
+    }
 }

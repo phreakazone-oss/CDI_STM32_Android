@@ -93,7 +93,9 @@ Simulator suara akustik knalpot motor berdaya tinggi:
 
 ### 5. Quick Setup & Wiring Workshop
 Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULSER -> TDC -> TPS -> FIRST START -> READY):
-- **Preservasi Status Workflow**: Nilai tahap setup (`setupStage`) dipreservasi dari respons `GET,SETUP` atau penyimpanan lokal agar tidak ter-reset saat menerima frame telemetri berkala.
+- **Preflight tahap BARU**: Tombol `PERIKSA & LANJUT` mengantrekan `PING`, `GET,STATUS`, dan `GET,SETUP`. Tahap 2 hanya dibuka setelah ketiga respons diterima serta RPM = 0 dan kedua HV < 30 V. Pesan layar menyebutkan respons yang hilang jika timeout.
+- **Status MCU dan halaman wizard dipisahkan**: Firmware menyimpan lima status (`0..4`), sedangkan aplikasi memiliki enam halaman (`0..5`) karena TPS adalah halaman panduan tambahan. `wizardStageFromFirmware()` memetakan keduanya agar FIRST START dan READY tidak bergeser satu tahap.
+- **Navigasi aman**: Kepala kartu tahap dapat diketuk untuk kembali ke tahap yang sudah terbuka. Membuka tahap yang belum selesai tidak mengubah flash MCU dan akan ditolak dengan alasan yang terlihat.
 - **Konfigurasi Pulser Lanjutan (`PulserAdvancedSettings`)**:
   - Pilihan Trigger Edge: `FALLING` (standar NS200) atau `RISING`.
   - Pilihan Rasio Pulsa: 1, 2, 3, atau 4 PPR (Pulse Per Revolution).
@@ -107,8 +109,10 @@ Panduan perkabelan dan alur inisialisasi tahap demi tahap (Workflow BARU -> PULS
 ### 6. BLE Terminal & Hex Diagnostics
 Diagnostik teknis tingkat lanjut:
 - **Statistik Paket Real-Time (Sliding Window 5 Detik)**:
-  - Frekuensi aktual transmisi paket (`packetRateHz`) dihitung secara dinamis dari stempel waktu frame masuk.
-  - Persentase integritas paket valid (`crcValidPercent`) dihitung berbasis validasi CRC16 terhadap total paket dalam jendela 5 detik.
+  - `packetRateHz` berasal hanya dari notifikasi biner karakteristik **Telemetry 1001**, bukan dari respons perintah 1003. Frekuensi dihitung dari selisih stempel waktu semua frame yang masuk pada jendela 5 detik.
+  - `crcValidPercent` membandingkan CRC16 hasil hitung byte `[0..17]` dengan CRC yang dikirim pada byte `[18..19]`, lalu membagi jumlah frame valid dengan seluruh frame pada jendela 5 detik.
+  - `0 Hz / BELUM ADA FRAME` berarti aplikasi belum menerima notifikasi Telemetry 1001. Ini berbeda dari CRC gagal; koneksi GATT dan respons `PING` pada karakteristik 1003 masih mungkin berfungsi.
+  - Watchdog mengubah laju menjadi 0 Hz bila tidak ada frame baru selama 1,5 detik dan menampilkan apakah telemetry belum pernah masuk atau berhenti setelah sempat aktif.
 - **Indikator Kualitas Sambungan BLE (`LinkQuality`)**:
   - **STABIL** (Hijau): Laju 18–22 Hz dan integritas CRC ≥ 99%.
   - **CUKUP** (Kuning/Oranye): Laju 12–17 Hz, laju > 22 Hz, atau integritas CRC 95–98.9%.
