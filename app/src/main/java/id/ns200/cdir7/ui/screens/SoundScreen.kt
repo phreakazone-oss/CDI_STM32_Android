@@ -8,6 +8,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +42,33 @@ fun SoundScreen(viewModel: CdiViewModel) {
     val soundVolume by viewModel.soundVolume.collectAsState()
     val soundPreset by viewModel.soundPreset.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
+    val isRevving by viewModel.isRevving.collectAsState()
+    val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
     val scrollState = rememberScrollState()
+
+    var selectedCategoryFilter by remember { mutableStateOf("SEMUA") }
+    val categories = listOf("SEMUA", "KAWASAKI", "MOGE CC BESAR", "SUPERSPORT & BALAP", "STANDAR & KUSTOM")
+
+    val filteredPresets = remember(selectedCategoryFilter) {
+        when (selectedCategoryFilter) {
+            "KAWASAKI" -> EngineSound.Preset.entries.filter {
+                it == EngineSound.Preset.NINJA250 || it == EngineSound.Preset.ZX25R
+            }
+            "MOGE CC BESAR" -> EngineSound.Preset.entries.filter {
+                it == EngineSound.Preset.MOGE_SUPERBASS ||
+                it == EngineSound.Preset.SUPERBIKE1000 || it == EngineSound.Preset.CROSS4 ||
+                it == EngineSound.Preset.DUCATI1200 || it == EngineSound.Preset.CRUISER_VTWIN
+            }
+            "SUPERSPORT & BALAP" -> EngineSound.Preset.entries.filter {
+                it == EngineSound.Preset.INLINE4 || it == EngineSound.Preset.INLINE3 ||
+                it == EngineSound.Preset.TWIN270 || it == EngineSound.Preset.V4
+            }
+            "STANDAR & KUSTOM" -> EngineSound.Preset.entries.filter {
+                it == EngineSound.Preset.SINGLE || it == EngineSound.Preset.CUSTOM
+            }
+            else -> EngineSound.Preset.entries
+        }
+    }
 
     // File picker launcher for custom audio
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -179,76 +208,375 @@ fun SoundScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // 6 EXHAUST ACOUSTIC PRESETS
-        Text(
-            text = "PILIHAN PRESET AKUSTIK KNALPOT",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            color = ElectricCyan
-        )
+        // LIVE AUDIO ENGINE TEST BENCH WITH INTERACTIVE THROTTLE / RPM SLIDER
+        val isBleMotorRunning = viewModel.bleClient.gattReady && telemetry.rpm > 100
+        val activeTestSlider = if (isBleMotorRunning) (telemetry.rpm / 12000f).coerceIn(0f, 1f) else demoThrottleSlider
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            EngineSound.Preset.entries.forEach { preset ->
-                val isSelected = preset == soundPreset
-                Card(
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.5.dp, if (isBleMotorRunning) RacingLime else MotecOrange, RoundedCornerShape(14.dp)),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = "Test Bench",
+                            tint = if (isBleMotorRunning) RacingLime else MotecOrange,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "LIVE AUDIO ENGINE TEST BENCH",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isBleMotorRunning) RacingLime else MotecOrange
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SurfacePanel)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = when {
+                                isBleMotorRunning -> "LIVE MOTOR • ${telemetry.rpm} RPM"
+                                isRevving -> "BLIP GAS AKTIF!"
+                                demoThrottleSlider > 0.01f -> "HOLD ${(demoThrottleSlider * 100).toInt()}% • ${telemetry.rpm} RPM"
+                                else -> "IDLE • ${telemetry.rpm} RPM"
+                            },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                isBleMotorRunning -> RacingLime
+                                isRevving -> RaceRedline
+                                demoThrottleSlider > 0.01f -> MotecOrange
+                                else -> ElectricCyan
+                            },
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // RPM and Preset Details
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column {
+                        Text(
+                            text = "PUTARAN MESIN (RPM)",
+                            fontSize = 10.sp,
+                            color = TextMuted,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "${telemetry.rpm}",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (telemetry.rpm > 9000) RaceRedline else RacingLime,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "THROTTLE: ${(telemetry.tps / 10f).toInt()}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ElectricCyan,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = soundPreset.label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // Interactive RPM Throttle Slider (Holds RPM for Demo & Follows Live Motor in BLE)
+                Slider(
+                    value = activeTestSlider,
+                    onValueChange = { newVal ->
+                        if (!isBleMotorRunning) {
+                            viewModel.setDemoThrottle(newVal)
+                        }
+                    },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (isBleMotorRunning) RacingLime else MotecOrange,
+                        activeTrackColor = if (isBleMotorRunning) RacingLime else MotecOrange,
+                        inactiveTrackColor = SurfacePanel
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("sound_screen_throttle_slider")
+                )
+
+                // Scale markings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("IDLE 1.4K", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("4.5K CRUISE", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("8.0K POWER", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("11.5K REDLINE", fontSize = 9.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                }
+
+                // Preset Quick Buttons & Momentary Blip Gas Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.resetDemoThrottle()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("IDLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.setDemoRpmDirect(4500f)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("4.5K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.setDemoRpmDirect(8000f)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("8K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MotecOrange, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.setDemoRpmDirect(11500f)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1.2f).height(34.dp)
+                    ) {
+                        Text("LIMITER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                    }
+
+                    // Momentary Quick Blip & Hold Gas Button (Simulasi Putar Tuas Gas)
+                    Box(
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isRevving) RaceRedline else MotecOrange)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        viewModel.triggerThrottleBlip()
+                                    },
+                                    onPress = {
+                                        val startTime = System.currentTimeMillis()
+                                        try {
+                                            viewModel.setHoldToRev(true)
+                                            tryAwaitRelease()
+                                            val duration = System.currentTimeMillis() - startTime
+                                            if (duration < 180) {
+                                                viewModel.triggerThrottleBlip()
+                                            }
+                                        } finally {
+                                            viewModel.setHoldToRev(false)
+                                        }
+                                    }
+                                )
+                            }
+                            .testTag("hold_to_rev_sound_screen_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isRevving) "GAS!!" else "BLIP GAS",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = CarbonDark,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+
+        // PRESET SELECTION HEADER & HORIZONTALLY SCROLLABLE FILTER CHIPS (NO EMPTY GAPS)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "PILIHAN PRESET AKUSTIK KNALPOT (${filteredPresets.size})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = ElectricCyan
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(SurfacePanel)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "AKTIF: ${soundPreset.cylinderCount}",
+                    fontSize = 9.sp,
+                    color = RacingLime,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        // Category Filter Chips with Horizontal Scroll (Eliminates Empty Space)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            categories.forEach { cat ->
+                val isFilterSelected = cat == selectedCategoryFilter
+                val count = when (cat) {
+                    "KAWASAKI" -> 2
+                    "MOGE CC BESAR" -> 5
+                    "SUPERSPORT & BALAP" -> 4
+                    "STANDAR & KUSTOM" -> 2
+                    else -> EngineSound.Preset.entries.size
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isFilterSelected) ElectricCyan.copy(alpha = 0.2f) else SurfacePanel)
                         .border(
                             1.dp,
-                            if (isSelected) ElectricCyan else BorderSubtle,
-                            RoundedCornerShape(12.dp)
+                            if (isFilterSelected) ElectricCyan else BorderSubtle,
+                            RoundedCornerShape(6.dp)
                         )
-                        .clickable {
-                            if (preset == EngineSound.Preset.CUSTOM) {
-                                    filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*"))
-                            } else {
-                                viewModel.setSoundPreset(preset)
-                            }
-                        }
-                        .testTag("sound_preset_${preset.name}"),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected) CardHover else CardBackground
-                    ),
-                    shape = RoundedCornerShape(12.dp)
+                        .clickable { selectedCategoryFilter = cat }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = cat,
+                            fontSize = 10.sp,
+                            fontWeight = if (isFilterSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isFilterSelected) ElectricCyan else TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isFilterSelected) ElectricCyan else TextMuted.copy(alpha = 0.3f))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "$count",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isFilterSelected) CarbonDark else TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // PRESET CARDS LIST
+        filteredPresets.forEach { preset ->
+            val isSelected = preset == soundPreset
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.5.dp,
+                        if (isSelected) ElectricCyan else BorderSubtle,
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable {
+                        if (preset == EngineSound.Preset.CUSTOM) {
+                            filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*"))
+                        } else {
+                            viewModel.setSoundPreset(preset)
+                        }
+                    }
+                    .testTag("sound_preset_${preset.name}"),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) CardHover else CardBackground
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(10.dp)
                                     .clip(CircleShape)
                                     .background(if (isSelected) ElectricCyan else BorderSubtle)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = preset.label,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) TextPrimary else TextSecondary,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = when (preset) {
-                                        EngineSound.Preset.SINGLE -> "1 Silinder: Karakter asli NS200 silinder tunggal DTS-i"
-                                        EngineSound.Preset.TWIN270 -> "2 Silinder: Dentuman berirama khas cross-twin 270 derajat"
-                                        EngineSound.Preset.INLINE3 -> "3 Silinder: Suara khas raungan melengking tiga silinder"
-                                        EngineSound.Preset.INLINE4 -> "4 Silinder: Screamer RPM tinggi ala superbike 4 silinder"
-                                        EngineSound.Preset.CROSS4 -> "4 Silinder: Geraman berat teratur konfigurasi crossplane"
-                                        EngineSound.Preset.V4 -> "V4 Silinder: Karakter bertenaga agresif prototipe V4 MotoGP"
-                                        EngineSound.Preset.CUSTOM -> "Kustom 5/6+ Silinder: Impor audio MP3/WAV/OGG manual"
-                                    },
-                                    fontSize = 11.sp,
-                                    color = TextMuted
-                                )
-                            }
+                            Text(
+                                text = preset.label,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) TextPrimary else TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
 
                         if (isSelected) {
@@ -260,7 +588,7 @@ fun SoundScreen(viewModel: CdiViewModel) {
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "ACTIVE",
+                                    text = "AKTIF",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ElectricCyan,
@@ -269,120 +597,198 @@ fun SoundScreen(viewModel: CdiViewModel) {
                             }
                         }
                     }
+
+                    // Badges: Category, Cylinder, Max RPM
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(SurfacePanel)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = preset.category,
+                                fontSize = 9.sp,
+                                color = RacingLime,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(SurfacePanel)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = preset.cylinderCount,
+                                fontSize = 9.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(SurfacePanel)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Redline: ${preset.maxRpmDisplay}",
+                                fontSize = 9.sp,
+                                color = MotecOrange,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = preset.description,
+                        fontSize = 11.sp,
+                        color = TextMuted,
+                        lineHeight = 15.sp
+                    )
+
+                    // Audition / Test Audio Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = {
+                                if (preset == EngineSound.Preset.CUSTOM) {
+                                    filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*"))
+                                } else {
+                                    viewModel.setSoundPreset(preset)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) ElectricCyan.copy(alpha = 0.25f) else SurfacePanel
+                            ),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSelected) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
+                                contentDescription = "Test Audio",
+                                tint = if (isSelected) ElectricCyan else TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isSelected) "SUARA AKTIF • DENGARKAN" else "PILIH & TEST SUARA",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) ElectricCyan else TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // CUSTOM AUDIO TRACKS MANAGER (5/6+ Silinder: MP3/WAV/OGG)
+        // CUSTOM AUDIO TRACKS MANAGER (Shown Only When Relevant, No Empty Container Box)
         val customTracks by viewModel.customSoundTracks.collectAsState()
         val selectedCustomTrack by viewModel.selectedCustomTrack.collectAsState()
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        if (soundPreset == EngineSound.Preset.CUSTOM || selectedCategoryFilter == "STANDAR & KUSTOM") {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = "CUSTOM 5/6+ SILINDER & AUDIO MANUAL",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MotecOrange,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Dukungan format MP3 / WAV / OGG mengikuti RPM",
-                            fontSize = 10.sp,
-                            color = TextSecondary,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Button(
-                        onClick = { filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*")) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add", tint = CarbonDark, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("TAMBAH", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
-                }
+                        Column {
+                            Text(
+                                text = "CUSTOM AUDIO FILE (MP3 / WAV / OGG)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MotecOrange,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "Sintesis pitch otomatis mengikuti putaran RPM",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (customTracks.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(SurfacePanel, RoundedCornerShape(8.dp))
-                            .padding(14.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Belum ada file audio manual 5/6 silinder. Tap TAMBAH untuk memilih berkas MP3/WAV/OGG.",
-                            fontSize = 11.sp,
-                            color = TextMuted,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Button(
+                            onClick = { filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*")) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add", tint = CarbonDark, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("PILIH BERKAS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                        }
                     }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        customTracks.forEach { track ->
-                            val isSel = selectedCustomTrack?.id == track.id
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) CardHover else SurfacePanel)
-                                    .border(1.dp, if (isSel) ElectricCyan else BorderSubtle, RoundedCornerShape(8.dp))
+
+                    if (customTracks.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            customTracks.forEach { track ->
+                                val isSel = selectedCustomTrack?.id == track.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSel) CardHover else SurfacePanel)
+                                        .border(1.dp, if (isSel) ElectricCyan else BorderSubtle, RoundedCornerShape(8.dp))
                                     .clickable { viewModel.selectCustomTrack(track) }
                                     .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(
-                                        imageVector = Icons.Default.Audiotrack,
-                                        contentDescription = "Audio",
-                                        tint = if (isSel) ElectricCyan else TextSecondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = track.name,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSel) TextPrimary else TextSecondary,
-                                            fontFamily = FontFamily.Monospace,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = "Base: ${track.baseRpm} RPM • ${track.format}",
-                                            fontSize = 9.sp,
-                                            color = TextMuted,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                }
-
-                                IconButton(
-                                    onClick = { viewModel.removeCustomTrack(track) },
-                                    modifier = Modifier.size(28.dp)
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = RaceRedline, modifier = Modifier.size(16.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Icon(
+                                            imageVector = Icons.Default.Audiotrack,
+                                            contentDescription = "Audio",
+                                            tint = if (isSel) ElectricCyan else TextSecondary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = track.name,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSel) TextPrimary else TextSecondary,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = "Base: ${track.baseRpm} RPM • ${track.format}",
+                                                fontSize = 9.sp,
+                                                color = TextMuted,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = { viewModel.removeCustomTrack(track) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = RaceRedline, modifier = Modifier.size(16.dp))
+                                    }
                                 }
                             }
                         }

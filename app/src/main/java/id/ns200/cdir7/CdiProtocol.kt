@@ -64,7 +64,8 @@ object CdiProtocol {
 
     fun response(frame: String): ProtocolResponse? {
         val clean = frame.trim()
-        if (!clean.startsWith('@')) return null
+        val prefix = clean.firstOrNull() ?: return null
+        if (prefix != '@' && prefix != '$') return null
         val star = clean.lastIndexOf('*')
         if (star <= 1 || clean.length < star + 5) return null
         val payload = clean.substring(1, star)

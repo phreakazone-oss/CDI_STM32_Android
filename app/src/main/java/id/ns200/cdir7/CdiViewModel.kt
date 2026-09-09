@@ -182,6 +182,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _isRevving = MutableStateFlow(false)
     val isRevving: StateFlow<Boolean> = _isRevving.asStateFlow()
 
+    private val _demoThrottleSlider = MutableStateFlow(0f)
+    val demoThrottleSlider: StateFlow<Float> = _demoThrottleSlider.asStateFlow()
+
     // Strobo Calibration State
     private val _strobeActive = MutableStateFlow(false)
     val strobeActive: StateFlow<Boolean> = _strobeActive.asStateFlow()
@@ -290,6 +293,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("Manual BLE disconnect / cancel requested.")
         } else {
             _isSimulationMode.value = false
+            _isRevving.value = false
+            _demoThrottleSlider.value = 0f
+            simRpm = 0f
+            simTps = 0f
+            engineSound.stop()
             _isConnected.value = false
             appendLog("Scanning for NS200-CDI-R7 BLE...")
             bleClient.connect()
@@ -300,6 +308,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun startBleScan() {
         _isSimulationMode.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
         appendLog("Scanning BLE devices nearby...")
         bleClient.startScan()
     }
@@ -311,6 +324,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun connectBleDevice(device: BluetoothDevice) {
         _isSimulationMode.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
         val dName = try {
             if (bleClient.hasPermissions()) device.name else null
         } catch (_: Exception) { null } ?: device.address
@@ -332,9 +350,66 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
+    private var blipJob: Job? = null
+
+    /**
+     * Simulasi putar tuas gas sekejap (Quick Throttle Twist / Blip).
+     * Mensimulasikan bukaan tuas gas responsif (TPS melesat cepat ke 85% lalu kembali ke nol)
+     * lengkap dengan lonjakan RPM spontan, knalpot meraung, dan deselerasi kembali ke idle.
+     */
+    fun triggerThrottleBlip() {
+        if (!bleClient.gattReady && !_isSimulationMode.value) {
+            _isSimulationMode.value = true
+            _isConnected.value = true
+            _connectionStatus.value = "SIMULASI AKTIF • Throttle Blip"
+        }
+        blipJob?.cancel()
+        blipJob = viewModelScope.launch(Dispatchers.Default) {
+            _isRevving.value = true
+            appendLog("BLIP: Putar tuas gas sekejap (Quick Throttle Twist)")
+
+            val startRpm = if (simRpm < 1200f) 1420f else simRpm
+            val maxLimit = _softRevLimiterRpm.value.toFloat().coerceAtLeast(10000f)
+            val peakBlipRpm = (startRpm + 4800f).coerceAtMost(maxLimit - 400f)
+
+            // Fase 1: Hentakan bukaan tuas gas (Attack: ~120ms)
+            val attackTicks = 5
+            for (i in 1..attackTicks) {
+                val ratio = i.toFloat() / attackTicks
+                val tpsVal = 0.85f * ratio
+                simTps = tpsVal
+                _demoThrottleSlider.value = tpsVal
+                simRpm = startRpm + (peakBlipRpm - startRpm) * (ratio * ratio)
+                delay(24)
+            }
+
+            // Fase 2: Puncak raungan gas sejenak (Peak hold: ~90ms)
+            delay(90)
+
+            // Fase 3: Tuas gas dilepas kembali ke nol
+            simTps = 0f
+            _demoThrottleSlider.value = 0f
+            _isRevving.value = false
+
+            // Fase 4: Deselerasi RPM meluruh bertahap sesuai inersia kruk as (Decay: ~360ms)
+            val decayTicks = 12
+            val currentPeak = simRpm
+            val idleTarget = if (_isSimulationMode.value) 1420f else 0f
+            for (i in 1..decayTicks) {
+                val progress = i.toFloat() / decayTicks
+                val factor = 1.0f - (1.0f - progress).let { it * it }
+                simRpm = currentPeak - (currentPeak - idleTarget) * factor
+                delay(30)
+            }
+            simRpm = idleTarget
+            appendLog("BLIP selesai: Tuas gas kembali idle.")
+        }
+    }
+
     fun setHoldToRev(pressed: Boolean) {
-        _isRevving.value = pressed
         if (pressed) {
+            blipJob?.cancel()
+            _isRevving.value = true
             if (bleClient.gattReady) {
                 appendLog("Hold To Rev hanya audio/simulasi; pengapian nyata tidak diperintah")
             } else if (!_isConnected.value) {
@@ -344,13 +419,43 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _connectionStatus.value = "SIMULASI AKTIF • Hold To Rev"
             }
         } else {
-            simTps = 0f
+            _isRevving.value = false
+            if (_demoThrottleSlider.value <= 0.01f) {
+                simTps = 0f
+            }
             appendLog("Hold To Rev dilepas")
+        }
+    }
+
+    fun setDemoThrottle(value: Float) {
+        val v = value.coerceIn(0f, 1f)
+        _demoThrottleSlider.value = v
+        if (v > 0.01f) {
+            if (!bleClient.gattReady && !_isSimulationMode.value) {
+                _isSimulationMode.value = true
+                _isConnected.value = true
+                _connectionStatus.value = "SIMULASI AKTIF • Demo Throttle"
+            }
+        }
+    }
+
+    fun setDemoRpmDirect(targetRpm: Float) {
+        val maxTarget = _softRevLimiterRpm.value.toFloat().coerceAtLeast(10000f)
+        val fraction = ((targetRpm - 1420f) / (maxTarget - 1420f)).coerceIn(0f, 1f)
+        setDemoThrottle(fraction)
+    }
+
+    fun resetDemoThrottle() {
+        _demoThrottleSlider.value = 0f
+        simTps = 0f
+        if (_isSimulationMode.value) {
+            simRpm = 1420f
         }
     }
 
     fun resetVirtualEngine() {
         _isRevving.value = false
+        _demoThrottleSlider.value = 0f
         simTps = 0f
         simRpm = if (_isSimulationMode.value) 1420f else 0f
         engineSound.stop()
@@ -974,6 +1079,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _isConnected.value = connected
         if (connected) {
             _isSimulationMode.value = false
+            _isRevving.value = false
+            _demoThrottleSlider.value = 0f
+            simRpm = 0f
+            simTps = 0f
+            engineSound.stop()
             bleClient.send("GET,STATUS")
             bleClient.send("GET,META")
             bleClient.send("GET,SETUP")
@@ -989,7 +1099,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             triggerEditBaseCdeg = value.triggerCdeg.coerceIn(0, 35999)
         context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
             .putInt("setup_stage", value.setupStage).apply()
-        engineSound.update(value)
+        if (value.rpm > 100 && _soundEnabled.value) {
+            engineSound.update(value)
+        } else {
+            engineSound.stop()
+        }
     }
 
     override fun onRawPacket(bytes: ByteArray) {
@@ -1080,22 +1194,47 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val revving = _isRevving.value
                 val isSim = _isSimulationMode.value
                 val realBleReady = bleClient.gattReady
+                val slider = _demoThrottleSlider.value
 
-                val shouldSimulate = !realBleReady && (isSim || revving || simRpm > 50f || simTps > 0.01f)
+                // If real BLE is connected, hardware telemetry governs everything unless user explicitly enabled demo simulation
+                if (realBleReady && !isSim) {
+                    // Motor is on real BLE. If real motor is off (RPM < 100), ensure sound is silent
+                    if (_telemetry.value.rpm < 100) {
+                        engineSound.stop()
+                    }
+                    continue
+                }
+
+                // If real motorcycle engine is running (RPM > 100 on BLE), prioritize real telemetry.
+                // Otherwise (engine off, test bench, or simulation), simulate based on slider/revving.
+                val realEngineRunning = realBleReady && _telemetry.value.rpm > 100
+                val shouldSimulate = !realEngineRunning && (isSim || revving || slider > 0.01f || simRpm > 50f || simTps > 0.01f)
                 if (shouldSimulate) {
                     // Update simulated throttle & RPM
                     if (revving) {
-                        simTps = (simTps + 0.18f).coerceAtMost(1.0f)
+                        simTps = (simTps + 0.20f).coerceAtMost(1.0f)
+                        _demoThrottleSlider.value = simTps
                         val targetRpm = _softRevLimiterRpm.value + 800f
-                        simRpm += (targetRpm - simRpm) * 0.20f
+                        simRpm += (targetRpm - simRpm) * 0.22f
                         if (simRpm >= _softRevLimiterRpm.value) {
                             // Limiter stutter flutter
+                            val flutter = ((sin(seq * 1.5) * 350f)).toFloat()
+                            simRpm = (_softRevLimiterRpm.value - 150f) + flutter
+                        }
+                    } else if (slider > 0.01f) {
+                        // Slider held at specific throttle/RPM
+                        simTps += (slider - simTps) * 0.35f
+                        val maxTarget = _softRevLimiterRpm.value.toFloat().coerceAtLeast(10000f)
+                        val targetRpm = 1420f + slider * (maxTarget - 1200f)
+                        simRpm += (targetRpm - simRpm) * 0.28f
+                        if (simRpm >= _softRevLimiterRpm.value) {
                             val flutter = ((sin(seq * 1.5) * 350f)).toFloat()
                             simRpm = (_softRevLimiterRpm.value - 150f) + flutter
                         }
                     } else {
                         // Quick snap decay on release
                         simTps = (simTps - 0.25f).coerceAtLeast(0.0f)
+                        _demoThrottleSlider.value = simTps
                         val idleTarget = if (isSim) (1420f + (sin(seq * 0.2) * 40f).toFloat()) else 0f
                         simRpm += (idleTarget - simRpm) * 0.25f
                         if (kotlin.math.abs(simRpm - idleTarget) < 25f) {
@@ -1103,7 +1242,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         }
                     }
 
-                    if (!isSim && !revving && simRpm <= 30f) {
+                    if (!isSim && !revving && slider <= 0.01f && simRpm <= 30f) {
                         simRpm = 0f
                         simTps = 0f
                         engineSound.stop()
@@ -1153,11 +1292,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         simTelemetry,
                         if (seq and 1 == 0) CdiProtocol.KIND_CORE else CdiProtocol.KIND_DIAGNOSTIC
                     )
-                    if (simRpm > 50f) {
+                    if (simRpm > 100f && _soundEnabled.value) {
                         engineSound.update(simTelemetry)
                     } else {
                         engineSound.stop()
                     }
+                } else if (!realEngineRunning) {
+                    engineSound.stop()
                 }
             }
         }

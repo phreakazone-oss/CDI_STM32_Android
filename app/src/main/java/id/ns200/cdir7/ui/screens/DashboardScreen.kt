@@ -41,10 +41,13 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val telemetry by viewModel.telemetry.collectAsState()
     val isRevving by viewModel.isRevving.collectAsState()
     val revLimit by viewModel.softRevLimiterRpm.collectAsState()
+    val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
     val isAtLimiter = telemetry.limiter > 0 || currentRpm >= revLimit
+    val isBleConnected = viewModel.bleClient.gattReady && currentRpm > 100
+    val displaySliderValue = if (isBleConnected) (currentRpm.toFloat() / revLimit.toFloat()).coerceIn(0f, 1f) else demoThrottleSlider
 
     // Limiter warning pulse animation
     val infiniteTransition = rememberInfiniteTransition(label = "limiter_pulse")
@@ -496,86 +499,174 @@ fun DashboardScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // INTERACTIVE "TAHAN UNTUK GAS" (HOLD TO REV) BUTTON - REACTS TO APP PRESS AND REAL MOTORCYCLE THROTTLE (TPS)
-        val isThrottleEngaged = isRevving || (telemetry.tps > 3)
-        val buttonBgColor by animateColorAsState(
-            targetValue = when {
-                telemetry.tps > 3 -> MotecOrange
-                isRevving -> MotecOrange
-                else -> SurfacePanel
-            },
-            animationSpec = tween(100),
-            label = "gas_btn_color"
-        )
-        val buttonBorderColor by animateColorAsState(
-            targetValue = when {
-                telemetry.tps > 3 -> RacingLime
-                isRevving -> RacingLime
-                else -> MotecOrange
-            },
-            animationSpec = tween(100),
-            label = "gas_border_color"
-        )
-
+        // INTERACTIVE THROTTLE / RPM SLIDER (HOLDS RPM IN DEMO, FOLLOWS REAL MOTORCYCLE IN BLE)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp)
-                .border(2.dp, buttonBorderColor, RoundedCornerShape(16.dp))
-                .shadow(if (isThrottleEngaged) 12.dp else 0.dp, shape = RoundedCornerShape(16.dp), ambientColor = MotecOrange)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            try {
-                                viewModel.setHoldToRev(true)
-                                tryAwaitRelease()
-                            } finally {
-                                viewModel.setHoldToRev(false)
-                            }
-                        }
-                    )
-                }
-                .testTag("hold_to_rev_button"),
-            colors = CardDefaults.cardColors(containerColor = buttonBgColor),
+                .border(1.5.dp, if (isBleConnected) RacingLime else MotecOrange, RoundedCornerShape(16.dp))
+                .shadow(if (displaySliderValue > 0.05f || isRevving) 10.dp else 0.dp, shape = RoundedCornerShape(16.dp), ambientColor = MotecOrange),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Header Row
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (isThrottleEngaged) Icons.Default.Speed else Icons.Default.ElectricBolt,
-                        contentDescription = "Rev Icon",
-                        tint = if (isThrottleEngaged) CarbonDark else MotecOrange,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(horizontalAlignment = Alignment.Start) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isBleConnected) Icons.Default.Speed else Icons.Default.Tune,
+                            contentDescription = "Throttle Slider",
+                            tint = if (isBleConnected) RacingLime else MotecOrange,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isBleConnected) "SLIDER REAL TIME (IKUTI RPM MOTOR)" else "SLIDER TACHO (TAHAN RPM DEMO)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isBleConnected) RacingLime else MotecOrange
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(SurfacePanel)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
                         Text(
                             text = when {
-                                telemetry.tps > 3 -> "GAS MOTOR DIPUTAR (${telemetry.tps}%) • LIVE CDI"
-                                isRevving -> "GAS DITEKAN (APP) • MODULASI AKTIF!"
-                                else -> "TAHAN UNTUK GAS (HOLD TO REV)"
+                                isBleConnected -> "LIVE CDI • $currentRpm RPM"
+                                demoThrottleSlider > 0.01f -> "TAHAN • ${(demoThrottleSlider * 100).toInt()}% ($currentRpm RPM)"
+                                else -> "IDLE • $currentRpm RPM"
                             },
-                            fontSize = 14.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isThrottleEngaged) CarbonDark else TextPrimary,
-                            letterSpacing = 0.5.sp
+                            color = if (isBleConnected) RacingLime else ElectricCyan
                         )
+                    }
+                }
+
+                // Interactive Slider
+                Slider(
+                    value = displaySliderValue,
+                    onValueChange = { newVal ->
+                        if (!isBleConnected) {
+                            viewModel.setDemoThrottle(newVal)
+                        }
+                    },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = if (isBleConnected) RacingLime else MotecOrange,
+                        activeTrackColor = if (isBleConnected) RacingLime else MotecOrange,
+                        inactiveTrackColor = SurfacePanel
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("tacho_throttle_slider")
+                )
+
+                // Scale markings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("IDLE 1.4K", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("4.5K CRUISE", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("8.0K POWER", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                    Text("$revLimit REDLINE", fontSize = 9.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                }
+
+                // Quick Preset RPM Buttons & Momentary Blip
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = { viewModel.resetDemoThrottle() },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("IDLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = { viewModel.setDemoRpmDirect(5000f) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("5K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = { viewModel.setDemoRpmDirect(8000f) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(34.dp)
+                    ) {
+                        Text("8K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MotecOrange, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = { viewModel.setDemoRpmDirect(revLimit.toFloat()) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1.2f).height(34.dp)
+                    ) {
+                        Text("LIMITER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                    }
+
+                    // Momentary Quick Blip & Hold Gas Button (Simulasi Putar Tuas Gas)
+                    Box(
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isRevving) RacingLime else MotecOrange)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        viewModel.triggerThrottleBlip()
+                                    },
+                                    onPress = {
+                                        val startTime = System.currentTimeMillis()
+                                        try {
+                                            viewModel.setHoldToRev(true)
+                                            tryAwaitRelease()
+                                            val duration = System.currentTimeMillis() - startTime
+                                            if (duration < 180) {
+                                                viewModel.triggerThrottleBlip()
+                                            }
+                                        } finally {
+                                            viewModel.setHoldToRev(false)
+                                        }
+                                    }
+                                )
+                            }
+                            .testTag("hold_to_rev_blip_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = when {
-                                telemetry.tps > 3 -> "Sensor TPS fisik motor aktif (${telemetry.tps}%) • Pengapian responsif"
-                                isRevving -> "Ramping RPM & Pengujian Audio/Pengapian Live..."
-                                else -> "Tekan tombol layar atau putar selongsong gas motor"
-                            },
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (isThrottleEngaged) CarbonDark.copy(alpha = 0.85f) else TextSecondary
+                            text = if (isRevving) "GAS!!" else "BLIP GAS",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = CarbonDark,
+                            fontFamily = FontFamily.Monospace
                         )
                     }
                 }
