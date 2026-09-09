@@ -55,9 +55,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Request BLE permissions early on app launch if needed
-        checkAndRequestPermissions(triggerConnect = false)
-
         setContent {
             CdiR7Theme {
                 MainAppScreen(

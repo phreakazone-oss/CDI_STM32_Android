@@ -2,10 +2,11 @@ package id.ns200.cdir7
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.PlaybackParams
 import android.net.Uri
-import android.media.SoundPool
 import com.example.R
 import kotlin.math.max
 
@@ -124,13 +125,10 @@ class EngineSound(private val context: Context) {
         )
     }
 
-    private var pool: SoundPool? = null
+    private var tracks = arrayOfNulls<AudioTrack>(3)
     private var loadedPreset: Preset? = null
-    private var activeSoundIds: IntArray? = null
-    private var loadedCount = 0
     var preset = Preset.SINGLE
         private set
-    private var streams = intArrayOf(0, 0, 0)
     private var customUri: Uri? = null
     private var customPlayer: MediaPlayer? = null
     private var customBaseRpm = 2000
@@ -149,51 +147,19 @@ class EngineSound(private val context: Context) {
                 stop()
             } else if (masterVolume > 0.001f) {
                 ensurePresetLoaded(preset)
+                startIfNeeded()
             }
         }
 
-    init {
-        getOrCreatePool()
-        ensurePresetLoaded(preset)
-    }
-
-    private fun getOrCreatePool(): SoundPool {
-        return pool ?: SoundPool.Builder().setMaxStreams(4).setAudioAttributes(
-            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
-        ).build().also { p ->
-            p.setOnLoadCompleteListener { _, sampleId, status ->
-                if (status == 0) {
-                    val ids = activeSoundIds
-                    if (ids != null && ids.contains(sampleId)) {
-                        loadedCount++
-                        if (enabled && masterVolume > 0.001f && loadedCount == 3) {
-                            startStreamsIfReady()
-                        }
-                    }
-                }
+    private fun loadPcmFromResource(resId: Int): ByteArray? {
+        return try {
+            context.resources.openRawResource(resId).use { input ->
+                val header = ByteArray(44)
+                val read = input.read(header)
+                if (read == 44) input.readBytes() else null
             }
-            pool = p
-        }
-    }
-
-    private fun startStreamsIfReady() {
-        if (!enabled || masterVolume <= 0.001f) {
-            stop()
-            return
-        }
-        val p = pool ?: return
-        val ids = activeSoundIds ?: return
-        if (loadedCount >= 3 && streams.all { it == 0 }) {
-            try {
-                // Punchy initial volume directly scaled to master volume, zero when master is zero
-                val initVol = (masterVolume * 0.45f).coerceIn(0f, 1f)
-                if (initVol > 0.001f) {
-                    streams = IntArray(3) { i ->
-                        p.play(ids[i], initVol, initVol, 1, -1, 1f)
-                    }
-                }
-            } catch (_: Exception) {}
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -202,22 +168,50 @@ class EngineSound(private val context: Context) {
             unloadActivePreset()
             return
         }
-        if (loadedPreset == p && activeSoundIds != null) return
+        if (loadedPreset == p && tracks.all { it != null }) return
 
         unloadActivePreset()
-        val pPool = getOrCreatePool()
-        loadedCount = 0
+        for (i in 0..2) {
+            try {
+                val pcmData = loadPcmFromResource(p.anchors[i]) ?: continue
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(22050)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(pcmData.size)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build()
+
+                track.write(pcmData, 0, pcmData.size)
+                val frameCount = pcmData.size / 2
+                track.setLoopPoints(0, frameCount, -1)
+                track.setVolume(0f)
+                tracks[i] = track
+            } catch (_: Exception) {}
+        }
         loadedPreset = p
-        activeSoundIds = IntArray(3) { i -> pPool.load(context, p.anchors[i], 1) }
     }
 
     private fun unloadActivePreset() {
-        activeSoundIds?.forEach { id ->
-            try { pool?.unload(id) } catch (_: Exception) {}
+        for (i in tracks.indices) {
+            try {
+                val track = tracks[i]
+                track?.stop()
+                track?.release()
+            } catch (_: Exception) {}
+            tracks[i] = null
         }
-        activeSoundIds = null
         loadedPreset = null
-        loadedCount = 0
     }
 
     fun setCustom(uri: Uri?, baseRpm: Int = customBaseRpm) {
@@ -234,8 +228,8 @@ class EngineSound(private val context: Context) {
         if (value == preset) return
         stop()
         preset = value
-        ensurePresetLoaded(preset)
         if (enabled && masterVolume > 0.001f) {
+            ensurePresetLoaded(preset)
             startIfNeeded()
         }
     }
@@ -259,16 +253,19 @@ class EngineSound(private val context: Context) {
             return
         }
         ensurePresetLoaded(preset)
-        if (streams.any { it != 0 }) return
-        if (loadedCount >= 3) {
-            startStreamsIfReady()
+        tracks.forEach { track ->
+            if (track != null && track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                try {
+                    track.play()
+                } catch (_: Exception) {}
+            }
         }
     }
 
     fun update(t: Telemetry) {
         // Absolute silence if muted or volume zero
         if (!enabled || masterVolume <= 0.001f) {
-            if (streams.any { it != 0 } || customPlayer != null) {
+            if (tracks.any { it?.playState == AudioTrack.PLAYSTATE_PLAYING } || customPlayer != null) {
                 stop()
             }
             return
@@ -276,7 +273,7 @@ class EngineSound(private val context: Context) {
 
         // If motor engine is off (< 100 RPM), cease all playback - no hanging drone
         if (t.rpm < 100) {
-            if (streams.any { it != 0 } || customPlayer != null) {
+            if (tracks.any { it?.playState == AudioTrack.PLAYSTATE_PLAYING } || customPlayer != null) {
                 stop()
             }
             return
@@ -304,7 +301,7 @@ class EngineSound(private val context: Context) {
                 }
                 return
             }
-            val p = pool ?: return
+
             val isMogeSuperbass = preset == Preset.MOGE_SUPERBASS
             val soundRpm = if (isMogeSuperbass) {
                 // Map bike's higher idle (~1400 RPM) to authentic slow 1800cc V-Twin idle (850 RPM)
@@ -330,7 +327,7 @@ class EngineSound(private val context: Context) {
                 ((soundRpm - 4000f) / 4000f).coerceIn(0f, 1f)
             }
             val mid = (if (soundRpm < anchors[1]) 1f - low else 1f - high).coerceIn(0f, 1f)
-            
+
             // Equal-power crossfade weights for louder, consistent body across the rev range
             val w0 = kotlin.math.sqrt(low)
             val w1 = kotlin.math.sqrt(mid)
@@ -339,12 +336,13 @@ class EngineSound(private val context: Context) {
             val weights = floatArrayOf(w0 / sumW, w1 / sumW, w2 / sumW)
             val presetGain = if (isMogeSuperbass) 1.25f else 1.0f
 
-            streams.forEachIndexed { i, stream ->
-                if (stream != 0) {
+            tracks.forEachIndexed { i, track ->
+                if (track != null) {
                     try {
                         val volume = (weights[i] * load * limiterGain * masterVolume * presetGain).coerceIn(0f, 1f)
-                        p.setVolume(stream, volume, volume)
-                        p.setRate(stream, (soundRpm / anchors[i]).coerceIn(.5f, 2f))
+                        track.setVolume(volume)
+                        val targetRate = (22050 * (soundRpm / anchors[i]).coerceIn(0.5f, 2f)).toInt()
+                        track.setPlaybackRate(targetRate)
                     } catch (_: Exception) {}
                 }
             }
@@ -354,19 +352,14 @@ class EngineSound(private val context: Context) {
     }
 
     fun stop() {
-        try {
-            val p = pool
-            if (p != null) {
-                p.autoPause()
-                streams.forEach { streamId ->
-                    if (streamId != 0) {
-                        try { p.setVolume(streamId, 0f, 0f) } catch (_: Exception) {}
-                        try { p.stop(streamId) } catch (_: Exception) {}
-                    }
+        tracks.forEach { track ->
+            try {
+                if (track != null && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    track.pause()
+                    track.setPlaybackHeadPosition(0)
                 }
-            }
-        } catch (_: Exception) {}
-        streams = intArrayOf(0, 0, 0)
+            } catch (_: Exception) {}
+        }
         try {
             customPlayer?.setVolume(0f, 0f)
             customPlayer?.pause()
@@ -378,7 +371,5 @@ class EngineSound(private val context: Context) {
     fun release() {
         stop()
         unloadActivePreset()
-        pool?.release()
-        pool = null
     }
 }
