@@ -355,6 +355,10 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
                                 Text("SIMPAN & STOP", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+
+                        // PANDUAN VISUAL WIRING & RANGKAIAN PENGAMAN SUNTIK KOIL & DAYA STM32
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OemLearnSafetyWiringGuide()
                     }
                 }
                 FirmwareRunMode.DIY -> {
@@ -659,3 +663,317 @@ private fun PendingButtonText(pending: Boolean, text: String) {
         Text(text, color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
+
+/**
+ * Komponen visualisasi interaktif rangkaian pengaman suntik koil (Pin 6 & 12)
+ * dan rangkaian daya penyalaan STM32 (Pin 5) untuk Mode OEM Learn.
+ */
+@Composable
+private fun OemLearnSafetyWiringGuide() {
+    var isExpanded by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(CarbonDark.copy(alpha = 0.85f))
+            .border(1.dp, if (selectedTab == 0) RacingLime.copy(alpha = 0.6f) else BorderSubtle, RoundedCornerShape(8.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Header dengan tombol lipat (expand/collapse)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = null,
+                    tint = SensorAmber,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "SKEMA RANGKAIAN PENGAMAN SUNTIK KOIL",
+                    color = SensorAmber,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        if (isExpanded) {
+            // Kotak Bahaya Tegangan Tinggi
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(RaceRedline.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                    .border(1.dp, RaceRedline.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.Warning, null, tint = RaceRedline, modifier = Modifier.size(15.dp))
+                    Text(
+                        text = "BAHAYA: TEGANGAN DISCHARGE KOIL 200V - 400V+",
+                        color = RaceRedline,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Text(
+                    text = "DILARANG KERAS menyambung kabel Pin 12 (Center Coil) atau Pin 6 (Side Coil) langsung ke pin STM32! Tegangan induksi dapat melonjak >600V dan akan LANGSUNG MEMBAKAR mikrokontroler STM32WB55. Gunakan salah satu skema pengaman di bawah ini:",
+                    color = TextPrimary,
+                    fontSize = 9.sp,
+                    lineHeight = 13.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            // Tab Selector
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    0 to "1. OPTOCOUPLER (100% AMAN)",
+                    1 to "2. DIVIDER + CLAMP",
+                    2 to "3. DAYA STM32 (+12V)"
+                ).forEach { (tabIdx, tabTitle) ->
+                    val active = selectedTab == tabIdx
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { selectedTab = tabIdx },
+                        color = if (active) ElectricCyan.copy(alpha = 0.2f) else SurfacePanel,
+                        shape = RoundedCornerShape(4.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (active) ElectricCyan else BorderSubtle
+                        )
+                    ) {
+                        Text(
+                            text = tabTitle,
+                            modifier = Modifier.padding(vertical = 5.dp, horizontal = 2.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            fontSize = 8.5.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (active) ElectricCyan else TextSecondary
+                        )
+                    }
+                }
+            }
+
+            // Konten Skema Sesuai Tab
+            when (selectedTab) {
+                0 -> {
+                    // TAB 1: OPTOCOUPLER ISOLASI TOTAL
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "METODE 1: ISOLASI TOTAL DENGAN OPTOCOUPLER (SANGAT DIREKOMENDASIKAN)",
+                            color = RacingLime,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Isolasi optik (cahaya) 100% melindungi STM32 dari spike tegangan tinggi CDI OEM.",
+                            color = TextSecondary,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+
+                        // Diagram ASCII Optocoupler
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "=== [1] JALUR SUNTIK KOIL CENTER (J1.12 ke PB3) ===\n" +
+                                        "Harness J1.12 (Oranye) ──[ R 47kΩ 2W ]──▶ Pin 1 (Anoda PC817)\n" +
+                                        "Harness J1.11 (GND)    ──[ Dioda 1N4148 ]─▶ Pin 2 (Katoda PC817)\n" +
+                                        "                                          (Antiparalel Spike)\n" +
+                                        "Pin 4 (Kolektor PC817) ─┬─▶ WeAct H_TOP.9 (Pin PB3)\n" +
+                                        "                        │   (Monitor Pulsa Center OEM)\n" +
+                                        "WeAct 3V3 (H_TOP.3) ───[4.7kΩ Pull-up]\n" +
+                                        "Pin 3 (Emitter PC817)  ───▶ WeAct H_TOP.1 (Pin GND)\n\n" +
+                                        "=== [2] JALUR SUNTIK KOIL SIDE (J1.6 ke PB4) ===\n" +
+                                        "Harness J1.6 (Hitam-Merah) ──[ R 47kΩ 2W ]──▶ Pin 1 (Anoda PC817 #2)\n" +
+                                        "Harness J1.11 (GND)        ──[ Dioda 1N4148 ]─▶ Pin 2 (Katoda PC817 #2)\n" +
+                                        "Pin 4 (Kolektor PC817 #2) ─┬─▶ WeAct H_TOP.8 (Pin PB4)\n" +
+                                        "WeAct 3V3 (H_TOP.3) ──────[4.7kΩ Pull-up]\n" +
+                                        "Pin 3 (Emitter PC817 #2)  ───▶ WeAct H_TOP.1 (Pin GND)",
+                                color = ElectricCyan,
+                                fontSize = 8.sp,
+                                lineHeight = 11.5.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        // Daftar Komponen
+                        Text(
+                            text = "DAFTAR KOMPONEN DIBUTUHKAN:\n" +
+                                    "• 2x IC Optocoupler PC817 / EL817 / 6N137\n" +
+                                    "• 2x Resistor 47 kΩ (WAJIB DAYA BESAR: 2 Watt Metal Film)\n" +
+                                    "• 2x Dioda 1N4148 (Dipasang antiparalel antara Pin 1 & 2 Optocoupler)\n" +
+                                    "• 2x Resistor 4.7 kΩ 0.25W (Pull-up ke 3V3 WeAct)",
+                            color = TextPrimary,
+                            fontSize = 8.5.sp,
+                            lineHeight = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                1 -> {
+                    // TAB 2: VOLTAGE DIVIDER + BAT54S CLAMP
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "METODE 2: VOLTAGE DIVIDER + CLAMP DIODA (ALTERNATIF RESISTOR)",
+                            color = SensorAmber,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Membagi tegangan dari ~300V menjadi ~3.0V dengan dioda clamp pengaman ke 3.3V.",
+                            color = TextSecondary,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+
+                        // Diagram ASCII Divider
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "=== JALUR CENTER (J1.12 ke PB3) ===\n" +
+                                        "J1.12 (Oranye) ──[ R1: 100kΩ 1W-2W ]──┬──[ R3: 1kΩ ]──▶ PB3 (H_TOP.9)\n" +
+                                        "                                       │\n" +
+                                        "                                 [ R2: 1.2kΩ ]\n" +
+                                        "                                       │\n" +
+                                        "                                 J1.11 (GND_STAR)\n" +
+                                        "                                       │\n" +
+                                        "                              [ Dioda BAT54S Clamp ]\n" +
+                                        "                              (Katoda ke 3V3, Anoda ke PB3)\n\n" +
+                                        "=== JALUR SIDE (J1.6 ke PB4) ===\n" +
+                                        "J1.6 (Hitam-M) ──[ R1: 100kΩ 1W-2W ]──┬──[ R3: 1kΩ ]──▶ PB4 (H_TOP.8)\n" +
+                                        "                                       └── R2 (1.2k) & Clamp ke GND/3V3",
+                                color = MotecOrange,
+                                fontSize = 8.sp,
+                                lineHeight = 11.5.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Text(
+                            text = "DAFTAR KOMPONEN DIBUTUHKAN:\n" +
+                                    "• 2x Resistor 100 kΩ (1 Watt atau 2 Watt Metal Film)\n" +
+                                    "• 2x Resistor 1.2 kΩ (0.25 Watt)\n" +
+                                    "• 2x Resistor 1 kΩ (0.25 Watt seri pengaman gerbang MCU)\n" +
+                                    "• 2x Dioda Schottky BAT54S / BAT85 (Clamp cepat batas tegangan 3.3V)",
+                            color = TextPrimary,
+                            fontSize = 8.5.sp,
+                            lineHeight = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                2 -> {
+                    // TAB 3: CATU DAYA PENYALAAN STM32 SAAT MESIN HIDUP DENGAN CDI OEM
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "SUMBER TEGANGAN PENYALAAN STM32 (+12V KONTAK KE +5V DC)",
+                            color = ElectricCyan,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "STM32 dan BLE harus menyala saat kunci kontak ON agar aplikasi dapat berkomunikasi dan merekam pulsa saat mesin motor hidup dengan CDI OEM.",
+                            color = TextSecondary,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+
+                        // Diagram ASCII Power Supply
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "Harness J1.5 (Cokelat / +12V Kontak) ──[ Sekring 2A ]──▶ [ VIN+ ]\n" +
+                                        "                                                        Modul Step-Down\n" +
+                                        "                                                        DC-DC Buck (5V)\n" +
+                                        "                                                       (LM2596 / MP1584)\n" +
+                                        "                                                        [ VOUT+ (5.0V) ] ──▶ WeAct Pin 5V (H_BOTTOM.1)\n" +
+                                        "                                                                             atau Port USB-C\n" +
+                                        "Harness J1.11 (Hitam-Kuning / GND)  ───────────────────▶ [ VIN- / GND ]\n" +
+                                        "                                                        [ VOUT- (GND) ] ───▶ WeAct Pin GND (H_TOP.1)",
+                                color = RacingLime,
+                                fontSize = 8.sp,
+                                lineHeight = 11.5.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Text(
+                            text = "LANGKAH KONEKSI DAYA SAAT OEM LEARN:\n" +
+                                    "1. Sambungkan input regulator step-down ke kabel Kontak J1.5 (+12V) dan Massa J1.11 (GND).\n" +
+                                    "2. Pastikan tegangan output regulator disetel stabil di 5.0 Volt DC.\n" +
+                                    "3. Hubungkan output 5.0V ke Pin 5V WeAct STM32 (atau colokkan kabel USB-C).\n" +
+                                    "4. Pastikan Pin GND WeAct STM32 terhubung ke GND_STAR motor (J1.11).\n" +
+                                    "5. Saat kontak motor diputar ke ON:\n" +
+                                    "   • CDI bawaan motor mendapat daya normal.\n" +
+                                    "   • STM32 menyala, Bluetooth BLE menyala.\n" +
+                                    "   • Buka aplikasi di HP, hubungkan BLE, pilih OEM LEARN, lalu hidupkan mesin!",
+                            color = TextPrimary,
+                            fontSize = 8.5.sp,
+                            lineHeight = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

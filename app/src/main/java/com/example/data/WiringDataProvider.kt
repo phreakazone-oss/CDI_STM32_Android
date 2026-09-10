@@ -506,7 +506,8 @@ object WiringDataProvider {
         "Sesuai revisi R7.2/R8: saklar toggle fisik SW_ARM ditiadakan. Resistor tetap R_ARM 1k menjaga jalur PB3.",
         "Catatan Firmware R8: Logika interlock hardware JP_HV, SW_ARM, dan JP_PRO telah dihapus dari firmware R8.",
         "Di Firmware R8, pin PB3 & PB4 difungsikan untuk alur Mode OEM_LEARN membaca sinyal CDI OEM secara pasif (PB3 = OEM Center, PB4 = OEM Side).",
-        "Kontak motor atau kill switch pada J1.5 yang berfungsi menghidupkan dan mematikan sistem.",
+        "PERINGATAN OEM LEARN: DILARANG menyambung langsung kabel koil (J1.12 Center & J1.6 Side) ke PB3/PB4! Wajib gunakan Optocoupler PC817 (dengan resistor seri 47k 2W) atau Voltage Divider 100k:1.2k + Dioda Clamp BAT54S agar tegangan spike 400V tidak membakar STM32.",
+        "Kontak motor atau kill switch pada J1.5 yang berfungsi menghidupkan dan mematikan sistem catu daya STM32.",
         "Pasang header 2-pin untuk JP_PRO di sisi yang mudah dijangkau dengan pinset.",
         "Solder resistor 10k dari PB4 ke GND_STAR agar pin tidak floating jika jumper dilepas."
       ),
