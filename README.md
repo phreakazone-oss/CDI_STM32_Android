@@ -52,6 +52,7 @@ Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-C
 | **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target R8**: NORMAL (285 V) dan PRO (345 V) via perintah software |
 | **Update Firmware MCU** | Wajib buka bodi & ST-Link V2 / DFU USB | **BLE OTA Flashing**: Unggah `APP.bin` langsung lewat aplikasi Android dengan proteksi CRC32 |
 
+https://github.com/phreakazone/Firmware_CDI_NS200
 ---
 
 ## 🛠 Arsitektur & Tumpukan Teknologi
