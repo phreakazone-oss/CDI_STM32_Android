@@ -1,6 +1,10 @@
 package id.ns200.cdir7.ui.screens
 
 import android.annotation.SuppressLint
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiProtocol
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.OtaState
 import id.ns200.cdir7.ui.theme.*
 
 enum class LinkQuality(val label: String, val color: Color) {
@@ -76,8 +82,30 @@ fun BleHexScreen(
     val telemetryRxMessage by viewModel.telemetryRxMessage.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val logs by viewModel.terminalLogs.collectAsState()
+    val otaState by viewModel.otaState.collectAsState()
+    val context = LocalContext.current
 
     val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
+
+    val binFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val fileName = it.lastPathSegment?.substringAfterLast('/') ?: "APP.bin"
+                    viewModel.startOtaUpload(bytes, fileName)
+                } else {
+                    Toast.makeText(context, "File kosong atau tidak dapat dibaca", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Gagal membaca file: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     var commandInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
@@ -201,6 +229,232 @@ fun BleHexScreen(
                         else "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label)
                     )
                     GattSpecRow("TELEMETRY RX", telemetryRxMessage)
+                }
+            }
+        }
+
+        // BLE OTA FIRMWARE UPLOADER (APP.BIN - R8) CARD
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, if (otaState is OtaState.Transferring) ElectricCyan else BorderSubtle, RoundedCornerShape(14.dp))
+                .testTag("ble_ota_card"),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "PENGUNGGAH FIRMWARE BLE (OTA R8)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MotecOrange,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Target binary: APP.bin (STM32WB55 Dual-Core)",
+                            fontSize = 10.sp,
+                            color = TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                when (otaState) {
+                                    is OtaState.Transferring -> ElectricCyan.copy(alpha = 0.2f)
+                                    is OtaState.Success -> RacingLime.copy(alpha = 0.2f)
+                                    is OtaState.Error -> RaceRedline.copy(alpha = 0.2f)
+                                    else -> SurfacePanel
+                                }
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = when (otaState) {
+                                is OtaState.Idle -> "IDLE"
+                                is OtaState.Preparing -> "MENYIAPKAN"
+                                is OtaState.Transferring -> "MENGUNGGAH"
+                                is OtaState.Verifying -> "VERIFIKASI"
+                                is OtaState.Success -> "SUKSES"
+                                is OtaState.Error -> "ERROR"
+                            },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = when (otaState) {
+                                is OtaState.Transferring -> ElectricCyan
+                                is OtaState.Success -> RacingLime
+                                is OtaState.Error -> RaceRedline
+                                else -> TextSecondary
+                            }
+                        )
+                    }
+                }
+
+                // Safety Preflight Status
+                val safetyErr = viewModel.checkOtaPreflightSafety()
+                val isSafetyOk = safetyErr == null
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (isSafetyOk) SurfacePanel else RaceRedline.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .border(1.dp, if (isSafetyOk) BorderSubtle else RaceRedline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "SYARAT KESELAMATAN SEBELUM OTA:",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSafetyOk) RacingLime else SensorAmber,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "• RPM = 0 (${if (telemetry.rpm == 0) "OK: Mesin Mati" else "BAHAYA: ${telemetry.rpm} RPM"})\n" +
+                               "• Output OFF (${if (!telemetry.centerEnabled && !telemetry.sideEnabled) "OK: Koil Nonaktif" else "PERINGATAN: Koil Aktif"})\n" +
+                               "• HV < 30V (${if (telemetry.hvCenter < 30 && telemetry.hvSide < 30) "OK: Aman (${telemetry.hvCenter}V/${telemetry.hvSide}V)" else "BAHAYA: ${telemetry.hvCenter}V/${telemetry.hvSide}V"})",
+                        fontSize = 9.sp,
+                        lineHeight = 13.sp,
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (!isSafetyOk) {
+                        Text(
+                            text = "Update hanya dapat dimulai saat RPM=0, output OFF, dan kedua HV <30 V.",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RaceRedline,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // OTA Transfer Status & Progress Bar
+                when (val state = otaState) {
+                    is OtaState.Transferring -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Mengirim: ${state.bytesTransferred} / ${state.totalBytes} Byte",
+                                    fontSize = 10.sp,
+                                    color = ElectricCyan,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "${(state.progressPercent * 100).toInt()}% (Chunk ${state.chunkIndex + 1}/${state.totalChunks})",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RacingLime,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { state.progressPercent },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = ElectricCyan,
+                                trackColor = SurfacePanel
+                            )
+                            Button(
+                                onClick = viewModel::cancelOtaUpload,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = RaceRedline),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                Text("BATALKAN PROSES OTA", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+                    is OtaState.Verifying -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = ElectricCyan)
+                            Text("Memverifikasi CRC32 Flash MCU...", fontSize = 11.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                    is OtaState.Success -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(RacingLime.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                .border(1.dp, RacingLime, RoundedCornerShape(8.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("SUKSES! Firmware R8 berhasil diunggah. ${state.message}", fontSize = 10.sp, color = RacingLime, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    is OtaState.Error -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(RaceRedline.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                .border(1.dp, RaceRedline, RoundedCornerShape(8.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Error, null, tint = RaceRedline, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("GAGAL OTA: ${state.reason}", fontSize = 10.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                    else -> Unit
+                }
+
+                // File Selection & Upload Buttons
+                if (otaState !is OtaState.Transferring && otaState !is OtaState.Preparing && otaState !is OtaState.Verifying) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            enabled = isSafetyOk,
+                            onClick = { binFilePickerLauncher.launch("*/*") },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.UploadFile, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("PILIH APP.BIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                        }
+
+                        OutlinedButton(
+                            enabled = isSafetyOk,
+                            onClick = {
+                                val dummyAppBin = ByteArray(65536) { (it and 0xFF).toByte() }
+                                viewModel.startOtaUpload(dummyAppBin, "APP_R8_DEMO.bin")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
+                        ) {
+                            Icon(Icons.Default.FlashOn, null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("TEST FIRMWARE R8", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                    }
                 }
             }
         }

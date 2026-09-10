@@ -1,12 +1,20 @@
 package id.ns200.cdir7
 
+import java.util.zip.CRC32
+
 enum class SetupStage(val code: Int, val label: String, val desc: String) {
-    BARU(0, "BARU", "Cek catu daya & BLE; starter dengan JP_HV lepas. HV <30V. Charger & koil OFF"),
+    BARU(0, "BARU", "Cek catu daya & BLE; kill switch OFF -> ON. HV <30V. Charger & koil OFF"),
     PULSER(1, "PULSER", "Uji input pulser J1.10; PPR=1; gate 80µs; quality >=10"),
     TDC(2, "TDC", "Strobo PB9; sejajarkan tanda 'T'; SAVE TDC ke flash"),
     TPS_CAL(3, "TPS", "Simpan gas tertutup (0%) dan terbuka penuh (100%)"),
-    FIRST_START(4, "FIRST START", "Mode aman 220V, CENTER saja, advance <=10°, limiter 3.000 RPM"),
-    READY(5, "READY", "Hidup stabil >=3 detik, simpan CENTER; boot berikutnya langsung pakai map")
+    FIRST_START(4, "FIRST START", "Mode aman 220V, CENTER saja, advance <=10°, limiter 3.000 RPM (Otomatis simpan 3s)"),
+    READY(5, "READY", "Hidup stabil >=3 detik, simpan CENTER; boot berikutnya otomatis READY")
+}
+
+enum class FirmwareRunMode(val code: String, val label: String, val desc: String) {
+    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif melalui PB3/PB4"),
+    MANUAL("MANUAL", "MANUAL", "Setup darurat strobo/TDC saat CDI OEM mati"),
+    DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik")
 }
 
 data class Telemetry(
@@ -18,6 +26,7 @@ data class Telemetry(
 ) {
     val armed get() = flags and 0x01 != 0
     val proJumper get() = flags and 0x02 != 0
+    val isProVoltage get() = flags and 0x02 != 0 // In R8, PRO voltage 345V vs NORMAL 285V is stored in config
     val hvEnabled get() = flags and 0x04 != 0
     val calibrated get() = flags and 0x08 != 0
     val bleLink get() = flags and 0x10 != 0
@@ -29,7 +38,8 @@ data class Telemetry(
     val fanEnabled get() = outputFlags and 8 != 0
     val stage get() = SetupStage.entries.find { it.code == setupStage } ?: SetupStage.BARU
     val isHvOver300 get() = hvCenter >= 300 || hvSide >= 300
-    val isHvOverLimitWarning get() = hvCenter >= 300 || hvSide >= 300
+    val isHvOverLimitWarning get() = hvCenter >= 360 || hvSide >= 360 // PRO R8 target is 345V
+    val targetHvVoltage get() = if (isProVoltage) 345 else 285
 }
 
 data class ProtocolResponse(val sequence: Int, val body: String)
@@ -39,13 +49,27 @@ object CdiProtocol {
     const val TELEMETRY = "7a8f1001-6c9d-4e40-a45f-0b4b4e533230"
     const val COMMAND = "7a8f1002-6c9d-4e40-a45f-0b4b4e533230"
     const val RESPONSE = "7a8f1003-6c9d-4e40-a45f-0b4b4e533230"
+
+    // R8 OTA UUIDs
+    const val OTA_DATA = "7a8f1004-6c9d-4e40-a45f-0b4b4e533230"
+    const val OTA_STATUS = "7a8f1005-6c9d-4e40-a45f-0b4b4e533230"
+    const val OTA_CHUNK_MAX_SIZE = 208
+
     const val TELEMETRY_SIZE = 20
-    const val VERSION = 3
+    const val VERSION_3 = 3 // R7 / v3
+    const val VERSION_4 = 4 // R8 / v4
+    const val VERSION = 4
+
     const val KIND_CORE = 0
     const val KIND_DIAGNOSTIC = 1
 
+    // Voltage targets
+    const val VOLTAGE_FIRST_START = 220
+    const val VOLTAGE_NORMAL = 285
+    const val VOLTAGE_PRO = 345
+
     /**
-     * Firmware R7 menyimpan 5 tahap (0..4), sedangkan aplikasi menampilkan
+     * Firmware R7/R8 menyimpan 5 tahap (0..4), sedangkan aplikasi menampilkan
      * 6 halaman karena kalibrasi TPS dibuat sebagai langkah tersendiri.
      * Jangan pernah menampilkan angka tahap firmware secara langsung sebagai
      * SetupStage aplikasi.
@@ -74,6 +98,12 @@ object CdiProtocol {
             repeat(8) { crc = ((crc shl 1) xor if (crc and 0x8000 != 0) 0x1021 else 0) and 0xffff }
         }
         return crc
+    }
+
+    fun crc32(data: ByteArray, offset: Int = 0, length: Int = data.size): Long {
+        val crc = CRC32()
+        crc.update(data, offset, length)
+        return crc.value
     }
 
     fun command(sequence: Int, body: String): ByteArray {
@@ -105,8 +135,9 @@ object CdiProtocol {
     }
 
     fun telemetry(packet: ByteArray, previous: Telemetry = emptyTelemetry()): Telemetry? {
+        val ver = packet.getOrNull(2)?.toInt()?.and(0xff) ?: return null
         if (packet.size != TELEMETRY_SIZE || u16(packet, 0) != 0xcd15 ||
-            (packet[2].toInt() and 0xff) != VERSION ||
+            (ver != VERSION_3 && ver != VERSION_4) ||
             (packet[3].toInt() and 0xff) !in KIND_CORE..KIND_DIAGNOSTIC ||
             crc16(packet, 18) != u16(packet, 18)) return null
         val sequence = u16(packet, 4)

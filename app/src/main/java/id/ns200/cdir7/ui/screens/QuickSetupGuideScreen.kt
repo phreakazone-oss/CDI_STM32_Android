@@ -231,9 +231,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        InterlockBadge("R_ARM tetap (PB3)", t.armed, RacingLime, RaceRedline)
-                        InterlockBadge("JP_HV (PB2)", t.hvEnabled, RacingLime, TextMuted)
-                        InterlockBadge("JP_PRO (PB4)", t.proJumper, ElectricCyan, TextMuted)
+                        InterlockBadge("PB3 (OEM Center)", t.armed, RacingLime, TextMuted)
+                        InterlockBadge("HV AKTIF", t.hvEnabled, RacingLime, TextMuted)
+                        InterlockBadge("PB4 (OEM Side)", t.proJumper, ElectricCyan, TextMuted)
                         InterlockBadge("CENTER KOIL", t.centerEnabled, RacingLime, TextMuted)
                         InterlockBadge("SIDE KOIL", t.sideEnabled, ElectricCyan, TextMuted)
                     }
@@ -637,9 +637,9 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.FIRST_START.code) }
             ) {
                 Text(
-                    text = "• Pastikan R_ARM 1k terpasang ke PB3, lalu pasang jumper JP_HV.\n" +
-                            "• Mode Pengamanan: Tegangan 220V, KOIL CENTER SAJA, Advance <= 10°, Rev-limiter 3.000 RPM.\n" +
-                            "• Tegangan HV Kapasitor Live: CENTER ${t.hvCenter}V, SIDE ${t.hvSide}V.",
+                    text = "• Mode Pengamanan: Tegangan 220V, KOIL CENTER SAJA, Advance <= 10°, Rev-limiter 3.000 RPM.\n" +
+                            "• Otomatis R8: Tersimpan setelah stabil 3 detik dan otomatis READY setelah mesin berhenti atau boot berikutnya.\n" +
+                            "• Tegangan HV Kapasitor Live: CENTER ${t.hvCenter}V, SIDE ${t.hvSide}V (Durasi Stabil: ${t.firstStartSeconds}/3s).",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
@@ -1053,8 +1053,8 @@ private fun WeActHeaderView() {
         WeActPinItem("1", "GND", "Input", "GND_STAR", "Board GND - AKTIF"),
         WeActPinItem("3", "3V3", "Output", "Hanya pullup/clamp/interlock", "Bukan sumber beban besar - AKTIF"),
         WeActPinItem("7", "PB5", "Output", "PB5--4.7k--QFAN base -> J1.7", "FAN relay sink - CONFIRM SEBELUM AKTIF"),
-        WeActPinItem("8", "PB4", "Input", "3V3--JP_PRO--PB4 (10k ke GND)", "PRO unlock fisik - WAJIB FISIK"),
-        WeActPinItem("9", "PB3", "Input", "3V3--R_ARM 1k--PB3 (10k ke GND)", "ARM otomatis - LINK TETAP"),
+        WeActPinItem("8", "PB4", "Input", "PB4: Monitor OEM Side (R8 Learn) / JP_PRO", "OEM Side monitor / config software"),
+        WeActPinItem("9", "PB3", "Input", "PB3: Monitor OEM Center (R8 Learn) / ARM", "OEM Center monitor / timing pasif"),
         WeActPinItem("11", "PA10", "Input", "PWM_CLAMP pullup 4.7k ke 3V3 (LOW=fault)", "Hardware fault - AKTIF"),
         WeActPinItem("12", "PE4", "Output", "LED onboard aktif-low", "Status - AKTIF"),
         WeActPinItem("14", "PB0", "Input", "VIN_FILT--100k--VBAT_ADC--1k--PB0", "ADC1_IN15 battery - AKTIF")

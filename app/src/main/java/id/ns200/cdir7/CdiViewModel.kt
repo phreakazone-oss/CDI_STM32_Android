@@ -199,12 +199,36 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
+    // Firmware R8 Modes & Features
+    private val _firmwareMode = MutableStateFlow(FirmwareRunMode.OEM_LEARN)
+    val firmwareMode: StateFlow<FirmwareRunMode> = _firmwareMode.asStateFlow()
+
+    private val _isOemLearning = MutableStateFlow(false)
+    val isOemLearning: StateFlow<Boolean> = _isOemLearning.asStateFlow()
+
+    private val _oemCenterPulses = MutableStateFlow(0)
+    val oemCenterPulses: StateFlow<Int> = _oemCenterPulses.asStateFlow()
+
+    private val _oemSideSamples = MutableStateFlow(0)
+    val oemSideSamples: StateFlow<Int> = _oemSideSamples.asStateFlow()
+
+    private val _isOemUnpluggedConfirmed = MutableStateFlow(false)
+    val isOemUnpluggedConfirmed: StateFlow<Boolean> = _isOemUnpluggedConfirmed.asStateFlow()
+
+    private val _targetHvVoltage = MutableStateFlow(CdiProtocol.VOLTAGE_NORMAL)
+    val targetHvVoltage: StateFlow<Int> = _targetHvVoltage.asStateFlow()
+
+    private val _isProVoltageConfigured = MutableStateFlow(false)
+    val isProVoltageConfigured: StateFlow<Boolean> = _isProVoltageConfigured.asStateFlow()
+
+    val otaState: StateFlow<OtaState> = bleClient.otaState
+
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
     val mapPresets = listOf(
         MapSlotData(
             slot = 0,
             name = "Slot 1: ECO",
-            description = "Kurva linear responsif untuk jalan raya, efisiensi BBM dan suhu dingin. Konservatif anchor 5° BTDC/1500 RPM sampai 32°/9800 RPM.",
+            description = "Kurva linear responsif untuk jalan raya, efisiensi BBM dan suhu dingin. Konservatif anchor 5° BTDC/1500 RPM sampai 32°/9800 RPM. Target HV 285V.",
             revLimit = 9800,
             peakAdvance = 32.0f,
             curvePoints = listOf(
@@ -214,7 +238,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         MapSlotData(
             slot = 1,
             name = "Slot 2: STREET",
-            description = "Map standar performa jalanan agresif. Respons gas instan dengan advance maksimum 34° BTDC.",
+            description = "Map standar performa jalanan agresif. Respons gas instan dengan advance maksimum 34° BTDC. Target HV 285V.",
             revLimit = 10500,
             peakAdvance = 34.0f,
             curvePoints = listOf(
@@ -224,7 +248,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         MapSlotData(
             slot = 2,
             name = "Slot 3: RAIN",
-            description = "Kurva aman untuk cuaca basah dan bensin oktan rendah (Low-RON). Mencegah slip dan knocking/detonasi.",
+            description = "Kurva aman untuk cuaca basah dan bensin oktan rendah (Low-RON). Mencegah slip dan knocking/detonasi. Target HV 285V.",
             revLimit = 9500,
             peakAdvance = 28.0f,
             curvePoints = listOf(
@@ -234,7 +258,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         MapSlotData(
             slot = 3,
             name = "Slot 4: PRO",
-            description = "Map kompetisi tingkat tinggi 16x8 matrix / 290V. Membutuhkan jumper fisik JP_PRO. Advance maksimum 36° BTDC.",
+            description = "Map kompetisi tingkat tinggi 16x8 matrix / 345V PRO. Dipilih melalui konfigurasi tersimpan (tanpa jumper fisik JP_PRO). Advance maksimum 36° BTDC.",
             revLimit = 11000,
             peakAdvance = 36.0f,
             curvePoints = listOf(
@@ -1199,19 +1223,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,FIRST_START")
-            appendLog("BLE Send: SETUP,FIRST_START (Mode Aman: 220V, CENTER saja, Max 10° Adv, Limiter 3.000 RPM)")
+            appendLog("BLE Send: SETUP,FIRST_START (Mode Aman: 220V, CENTER saja, Max 10° Adv, Limiter 3.000 RPM, Otomatis simpan setelah 3 detik)")
         } else {
-            appendLog("Mode FIRST START Siap (220V, CENTER saja, Limiter 3.000 RPM)")
+            appendLog("Mode FIRST START Siap (220V, CENTER saja, Limiter 3.000 RPM, Otomatis 3 detik)")
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
-        Toast.makeText(context, if (bleClient.gattReady) "FIRST START masuk antrean; tunggu ACK sebelum memasang JP_HV" else "FIRST START aktif di Demo", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, if (bleClient.gattReady) "FIRST START aktif. Hidupkan mesin 3 detik untuk simpan otomatis." else "FIRST START aktif di Demo", Toast.LENGTH_LONG).show()
     }
 
     fun confirmReadyCenterOnly() {
         if (!requireMcuOrDemo("READY CENTER")) return
         val t = _telemetry.value
         if (t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "PERINGATAN: Kontak OFF, JP_HV lepas & HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
             return
         }
         if (bleClient.gattReady) {
@@ -1229,7 +1253,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("READY tiga busi")) return
         val t = _telemetry.value
         if (t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "PERINGATAN: Kontak OFF, JP_HV lepas & HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
             return
         }
         if (bleClient.gattReady) {
@@ -1241,6 +1265,139 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             advanceSetupStage(SetupStage.READY.code)
         }
         Toast.makeText(context, if (bleClient.gattReady) "READY tiga busi masuk antrean; tunggu ACK" else "READY tiga busi aktif di Demo", Toast.LENGTH_LONG).show()
+    }
+
+    // --- R8 Mode & Flow Controls ---
+    fun setFirmwareMode(mode: FirmwareRunMode) {
+        if (!requireMcuOrDemo("ganti mode")) return
+        when (mode) {
+            FirmwareRunMode.OEM_LEARN -> {
+                _firmwareMode.value = mode
+                if (bleClient.gattReady) {
+                    markSetupCommandPending()
+                    bleClient.send("MODE,OEM_LEARN")
+                    appendLog("BLE Send: MODE,OEM_LEARN")
+                } else {
+                    appendLog("Mode: OEM_LEARN aktif di Demo")
+                }
+                Toast.makeText(context, "Mode OEM LEARN Aktif (baca CDI OEM via PB3/PB4)", Toast.LENGTH_SHORT).show()
+            }
+            FirmwareRunMode.MANUAL -> {
+                _firmwareMode.value = mode
+                if (bleClient.gattReady) {
+                    markSetupCommandPending()
+                    bleClient.send("MODE,MANUAL")
+                    appendLog("BLE Send: MODE,MANUAL")
+                } else {
+                    appendLog("Mode: MANUAL aktif di Demo")
+                }
+                Toast.makeText(context, "Mode MANUAL Aktif (Strobo/TDC darurat)", Toast.LENGTH_SHORT).show()
+            }
+            FirmwareRunMode.DIY -> {
+                if (!_isOemUnpluggedConfirmed.value) {
+                    Toast.makeText(context, "Peringatan: Konfirmasi OEM_UNPLUGGED dahulu sebelum aktifkan DIY!", Toast.LENGTH_LONG).show()
+                    return
+                }
+                _firmwareMode.value = mode
+                if (bleClient.gattReady) {
+                    markSetupCommandPending()
+                    bleClient.send("MODE,DIY,OEM_UNPLUGGED")
+                    appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
+                } else {
+                    appendLog("Mode: DIY aktif di Demo (OEM terlepas)")
+                }
+                Toast.makeText(context, "Mode DIY Aktif (CDI mandiri)", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun startOemLearn() {
+        if (!requireMcuOrDemo("start OEM Learn")) return
+        _isOemLearning.value = true
+        _firmwareMode.value = FirmwareRunMode.OEM_LEARN
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send("MODE,OEM_LEARN")
+            bleClient.send("LEARN,START")
+            appendLog("BLE Send: MODE,OEM_LEARN & LEARN,START")
+        } else {
+            appendLog("OEM Learn Dimulai: membaca pulsa PB3/PB4...")
+        }
+        Toast.makeText(context, "OEM Learn Dimulai: Hidupkan mesin dengan CDI OEM", Toast.LENGTH_SHORT).show()
+    }
+
+    fun stopOemLearn() {
+        if (!requireMcuOrDemo("stop OEM Learn")) return
+        _isOemLearning.value = false
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send("LEARN,STOP")
+            appendLog("BLE Send: LEARN,STOP")
+        } else {
+            appendLog("OEM Learn Dihentikan: timing tersimpan di STM32.")
+        }
+        Toast.makeText(context, "OEM Learn Selesai: Matikan mesin & cabut soket CDI OEM", Toast.LENGTH_SHORT).show()
+    }
+
+    fun confirmOemUnplugged() {
+        _isOemUnpluggedConfirmed.value = true
+        _firmwareMode.value = FirmwareRunMode.DIY
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send("MODE,DIY,OEM_UNPLUGGED")
+            appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
+        } else {
+            appendLog("Konfirmasi OEM Unplugged Diterima. Mode DIY Aktif.")
+            advanceSetupStage(SetupStage.FIRST_START.code)
+        }
+        Toast.makeText(context, "OEM Unplugged Dikonfirmasi • Mode DIY Aktif", Toast.LENGTH_SHORT).show()
+    }
+
+    fun setHvVoltageMode(proMode: Boolean) {
+        if (!requireMcuOrDemo("pengaturan tegangan")) return
+        _isProVoltageConfigured.value = proMode
+        _targetHvVoltage.value = if (proMode) CdiProtocol.VOLTAGE_PRO else CdiProtocol.VOLTAGE_NORMAL
+        val cmd = if (proMode) "SETUP,VOLTAGE,PRO" else "SETUP,VOLTAGE,NORMAL"
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send(cmd)
+            appendLog("BLE Send: $cmd (Target HV: ${_targetHvVoltage.value}V)")
+        } else {
+            appendLog("Tegangan HV diubah ke ${_targetHvVoltage.value}V (${if (proMode) "PRO" else "NORMAL"})")
+        }
+        Toast.makeText(context, "Tegangan HV Target: ${_targetHvVoltage.value}V", Toast.LENGTH_SHORT).show()
+    }
+
+    fun checkOtaPreflightSafety(): String? {
+        val t = _telemetry.value
+        if (t.rpm > 0) return "Mesin masih berputar (${t.rpm} RPM)! Matikan mesin (RPM = 0)."
+        if (t.hvCenter >= 30 || t.hvSide >= 30) return "Tegangan HV masih tinggi (Center: ${t.hvCenter}V, Side: ${t.hvSide}V)! Tunggu hingga < 30V."
+        return null
+    }
+
+    fun startOtaUpload(bytes: ByteArray, fileName: String) {
+        val safetyErr = checkOtaPreflightSafety()
+        if (safetyErr != null) {
+            Toast.makeText(context, "Gagal Mulai OTA: $safetyErr", Toast.LENGTH_LONG).show()
+            appendLog("OTA Ditolak: $safetyErr")
+            return
+        }
+
+        if (bleClient.gattReady) {
+            appendLog("Memulai OTA BLE untuk file: $fileName (${bytes.size} byte)")
+            bleClient.startOta(bytes)
+        } else if (_isSimulationMode.value) {
+            appendLog("Simulasi OTA BLE: $fileName (${bytes.size} byte)")
+            bleClient.startOta(bytes)
+        } else {
+            Toast.makeText(context, "Hubungkan BLE CDI atau aktifkan Demo Mode untuk mencoba OTA", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun cancelOtaUpload() {
+        bleClient.cancelOta()
+        appendLog("OTA dibatalkan oleh pengguna")
+        Toast.makeText(context, "OTA Dibatalkan", Toast.LENGTH_SHORT).show()
     }
 
     fun resetSetupWorkflow() {
@@ -1347,10 +1504,20 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     override fun onTelemetry(value: Telemetry) {
         val current = _telemetry.value
 
+        var targetStage = current.setupStage
+        // Firmware R8 FIRST START otomatis tersimpan setelah 3s stabil & otomatis READY saat mesin berhenti
+        if (current.setupStage == SetupStage.FIRST_START.code) {
+            if (value.firstStartSeconds >= 3 && value.rpm == 0) {
+                targetStage = SetupStage.READY.code
+                _firmwareSetupStage.value = targetStage
+                _quickSetupPage.value = targetStage
+                _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, targetStage)
+                appendLog("R8 Telemetry: FIRST START stabil >= 3s & mesin berhenti -> Otomatis READY!")
+            }
+        }
+
         val merged = value.copy(
-            // Field ini tidak ada dalam paket telemetri v3.
-            // Pertahankan nilai terakhir dari GET,SETUP.
-            setupStage = current.setupStage
+            setupStage = targetStage
         )
 
         _telemetry.value = merged
@@ -1555,6 +1722,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 preflightSetupOk = true
                 updateQuickSetupPreflightProgress()
             }
+            "LEARN" -> if (f.size >= 4 && f[1] == "PULSES") {
+                _oemCenterPulses.value = f[2].toIntOrNull() ?: _oemCenterPulses.value
+                _oemSideSamples.value = f[3].toIntOrNull() ?: _oemSideSamples.value
+            }
             "ACK" -> {
                 clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
@@ -1583,6 +1754,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 )
 
                 when {
+                    operation == "MODE_OEM_LEARN" -> _firmwareMode.value = FirmwareRunMode.OEM_LEARN
+                    operation == "MODE_MANUAL" -> _firmwareMode.value = FirmwareRunMode.MANUAL
+                    operation == "MODE_DIY" -> _firmwareMode.value = FirmwareRunMode.DIY
+                    operation == "LEARN_START" -> _isOemLearning.value = true
+                    operation == "LEARN_STOP" -> _isOemLearning.value = false
+                    operation == "VOLTAGE_PRO" -> {
+                        _isProVoltageConfigured.value = true
+                        _targetHvVoltage.value = CdiProtocol.VOLTAGE_PRO
+                    }
+                    operation == "VOLTAGE_NORMAL" -> {
+                        _isProVoltageConfigured.value = false
+                        _targetHvVoltage.value = CdiProtocol.VOLTAGE_NORMAL
+                    }
                     operation in setupChangingOperations -> {
                         if (operation == "SETUP_RESET") {
                             _quickSetupPage.value = SetupStage.BARU.code
@@ -1702,15 +1886,38 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         else -> 0
                     }
 
+                    // R8 OEM Learn simulation
+                    if (_isOemLearning.value) {
+                        _oemCenterPulses.value = (_oemCenterPulses.value + 1).coerceAtMost(50)
+                        if (_oemCenterPulses.value >= 5) {
+                            _oemSideSamples.value = (_oemSideSamples.value + 1).coerceAtMost(30)
+                        }
+                    }
+
+                    // R8 Automatic FIRST START logic in simulation
+                    var fsSeconds = _telemetry.value.firstStartSeconds
+                    if (_telemetry.value.setupStage == SetupStage.FIRST_START.code) {
+                        if (simRpm > 1000f) {
+                            if (seq % 20 == 0) { // ~1s
+                                fsSeconds = (fsSeconds + 1).coerceAtMost(10)
+                            }
+                        } else if (simRpm <= 50f && fsSeconds >= 3) {
+                            // Engine stopped after 3s -> automatically READY!
+                            advanceSetupStage(SetupStage.READY.code)
+                            appendLog("R8 Demo: FIRST START stabil >= 3 detik & mesin berhenti -> Otomatis READY!")
+                        }
+                    }
+
                     seq = (seq + 1) and 0xFFFF
+                    val targetHv = if (_isProVoltageConfigured.value) 345 else 285
                     val simTelemetry = Telemetry(
                         sequence = seq,
                         rpm = simRpm.toInt().coerceIn(0, 13000),
                         tps = (simTps * 1000).toInt(),
                         advanceCdeg = (finalAdvance * 100).toInt(),
                         batteryCv = 1380 + (sin(seq * 0.1) * 20).toInt(),
-                        hvCenter = 248 + (sin(seq * 0.3) * 4).toInt(),
-                        hvSide = 252 + (sin(seq * 0.25) * 5).toInt(),
+                        hvCenter = targetHv + (sin(seq * 0.3) * 4).toInt(),
+                        hvSide = targetHv + (sin(seq * 0.25) * 5).toInt(),
                         tempCdeg = 8200 + (simTps * 500).toInt(),
                         slot = _selectedMapSlot.value,
                         limiter = limiterState,
@@ -1720,7 +1927,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         outputFlags = 0x03 or (if (_strobeActive.value) 0x04 else 0x00),
                         triggerCdeg = candidateTriggerCdeg(_pulserOffsetDeg.value),
                         pickupQuality = 99,
-                        firstStartSeconds = 0
+                        firstStartSeconds = fsSeconds
                     )
 
                     _telemetry.value = simTelemetry

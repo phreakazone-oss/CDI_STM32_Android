@@ -503,7 +503,9 @@ object WiringDataProvider {
       ),
       schematicTrace = "3V3 -> R_ARM 1k -> H_TOP.9 (PB3) -> [10k ke GND_STAR] | 3V3 -> JP_PRO -> H_TOP.8 (PB4) -> [10k ke GND_STAR]",
       perfboardTips = listOf(
-        "Sesuai revisi R7.2: saklar toggle fisik SW_ARM ditiadakan. Cukup pasang resistor tetap R_ARM 1k dari 3V3 ke PB3.",
+        "Sesuai revisi R7.2/R8: saklar toggle fisik SW_ARM ditiadakan. Resistor tetap R_ARM 1k menjaga jalur PB3.",
+        "Catatan Firmware R8: Logika interlock hardware JP_HV, SW_ARM, dan JP_PRO telah dihapus dari firmware R8.",
+        "Di Firmware R8, pin PB3 & PB4 difungsikan untuk alur Mode OEM_LEARN membaca sinyal CDI OEM secara pasif (PB3 = OEM Center, PB4 = OEM Side).",
         "Kontak motor atau kill switch pada J1.5 yang berfungsi menghidupkan dan mematikan sistem.",
         "Pasang header 2-pin untuk JP_PRO di sisi yang mudah dijangkau dengan pinset.",
         "Solder resistor 10k dari PB4 ke GND_STAR agar pin tidak floating jika jumper dilepas."

@@ -9,9 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.FirmwareRunMode
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.SetupStage
 import id.ns200.cdir7.Telemetry
@@ -229,11 +228,19 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
     val connected by viewModel.isConnected.collectAsState()
     val demo by viewModel.isSimulationMode.collectAsState()
     val busy by viewModel.quickSetupPreflightBusy.collectAsState()
+    val pending by viewModel.setupCommandPending.collectAsState()
+    val fwMode by viewModel.firmwareMode.collectAsState()
+    val isOemLearning by viewModel.isOemLearning.collectAsState()
+    val oemCenterPulses by viewModel.oemCenterPulses.collectAsState()
+    val oemSideSamples by viewModel.oemSideSamples.collectAsState()
+    val isOemUnpluggedConfirmed by viewModel.isOemUnpluggedConfirmed.collectAsState()
+    val isProVoltage by viewModel.isProVoltageConfigured.collectAsState()
+    val targetHv by viewModel.targetHvVoltage.collectAsState()
 
     StageBody {
         StageCard(
             title = "1 • PEMERIKSAAN AWAL",
-            subtitle = "JP_HV harus dilepas. Mesin mati, lalu aplikasi memeriksa PING, STATUS, SETUP, RPM dan tegangan HV."
+            subtitle = "Mesin mati, HV < 30V. Aplikasi memeriksa PING, STATUS, SETUP, RPM dan tegangan HV sebelum lanjut."
         ) {
             CompactStatusRow("BLE / MCU", if (connected || demo) "SIAP" else "BELUM TERHUBUNG", connected || demo)
             CompactStatusRow("RPM", "${t.rpm}", t.rpm == 0)
@@ -252,6 +259,211 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
                     Text("MENUNGGU RESPONS MCU...", color = CarbonDark)
                 } else {
                     Text("PERIKSA & LANJUT PULSER", color = CarbonDark)
+                }
+            }
+        }
+
+        StageCard(
+            title = "KONTROL MODE FIRMWARE R8",
+            subtitle = "Pilih alur kerja CDI STM32. Mode DIY mandiri hanya aktif setelah konfirmasi OEM_UNPLUGGED (tidak ada takeover otomatis)."
+        ) {
+            // Mode selector tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    FirmwareRunMode.OEM_LEARN to "OEM LEARN",
+                    FirmwareRunMode.MANUAL to "MANUAL",
+                    FirmwareRunMode.DIY to "DIY"
+                ).forEach { (m, label) ->
+                    val isSelected = fwMode == m
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { viewModel.setFirmwareMode(m) },
+                        color = if (isSelected) MotecOrange.copy(alpha = 0.2f) else SurfacePanel,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) MotecOrange else BorderSubtle
+                        )
+                    ) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.padding(vertical = 7.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            fontSize = 10.sp,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isSelected) MotecOrange else TextSecondary
+                        )
+                    }
+                }
+            }
+
+            when (fwMode) {
+                FirmwareRunMode.OEM_LEARN -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "ALUR OEM LEARN (BACA TIMING PASIF PB3/PB4)",
+                            color = ElectricCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "STM32 membaca sinyal pengapian CDI OEM secara pasif melalui PB3 (Center) & PB4 (Side). Mesin hidup menggunakan CDI OEM.",
+                            color = TextSecondary,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        CompactStatusRow("PULSA OEM CENTER (PB3)", "$oemCenterPulses pulsa", oemCenterPulses > 0)
+                        CompactStatusRow("SAMPEL OEM SIDE (PB4)", "$oemSideSamples sampel", oemSideSamples > 0)
+                        CompactStatusRow("STATUS BELAJAR", if (isOemLearning) "SEDANG MEREKAM..." else "SIAP", isOemLearning)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                enabled = !isOemLearning && !pending,
+                                onClick = viewModel::startOemLearn,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(vertical = 5.dp)
+                            ) {
+                                Text("MULAI LEARN", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                enabled = isOemLearning && !pending,
+                                onClick = viewModel::stopOemLearn,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(vertical = 5.dp)
+                            ) {
+                                Text("SIMPAN & STOP", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                FirmwareRunMode.DIY -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "MODE DIY (CDI MANDIRI - TANPA OEM)",
+                            color = if (isOemUnpluggedConfirmed) RacingLime else SensorAmber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            if (isOemUnpluggedConfirmed) {
+                                "Soket CDI OEM terkonfirmasi dilepas. CDI STM32 bekerja secara mandiri mengontrol pengapian."
+                            } else {
+                                "PERHATIAN KESELAMATAN: Mode DIY hanya aktif setelah CDI OEM dicabut dari harness (OEM_UNPLUGGED). Tidak ada takeover otomatis."
+                            },
+                            color = TextSecondary,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        if (!isOemUnpluggedConfirmed) {
+                            Button(
+                                enabled = !pending,
+                                onClick = viewModel::confirmOemUnplugged,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("OEM_UNPLUGGED Dikonfirmasi • DIY Aktif", color = RacingLime, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+                }
+                FirmwareRunMode.MANUAL -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "MODE MANUAL (STROBO / TDC DARURAT)",
+                            color = ElectricCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "Mempertahankan setup strobo/TDC lama untuk kondisi CDI OEM rusak atau mati total.",
+                            color = TextSecondary,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            // Target Voltage Selector R8
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "TARGET TEGANGAN HV R8 (NORMAL 285 V / PRO 345 V)",
+                color = SensorAmber,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+            CompactStatusRow("TEGANGAN TERPILIH", "$targetHv V (${if (isProVoltage) "PRO 345V" else "NORMAL 285V"})", true)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    enabled = !pending,
+                    onClick = { viewModel.setHvVoltageMode(false) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isProVoltage) MotecOrange else SurfacePanel
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(vertical = 5.dp)
+                ) {
+                    Text("NORMAL 285 V", color = if (!isProVoltage) CarbonDark else TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    enabled = !pending,
+                    onClick = { viewModel.setHvVoltageMode(true) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isProVoltage) ElectricCyan else SurfacePanel
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(vertical = 5.dp)
+                ) {
+                    Text("PRO 345 V", color = if (isProVoltage) CarbonDark else TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -328,16 +540,17 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry) {
     val pending by viewModel.setupCommandPending.collectAsState()
     val firstStartHv by viewModel.firstStartHv.collectAsState()
     val ranLongEnough = t.firstStartSeconds >= 3
-    val stoppedAndSafe = t.rpm == 0 && !t.hvEnabled && t.hvCenter < 30 && t.hvSide < 30
+    val stoppedAndSafe = t.rpm == 0 && t.hvCenter < 30 && t.hvSide < 30
     val canSaveReady = ranLongEnough && stoppedAndSafe && !pending
 
     StageBody {
         StageCard(
-            title = "5 • FIRST START AMAN",
-            subtitle = "Aktifkan mode aman sebelum memasang JP_HV: CENTER saja, advance ≤10° dan limiter 3.000 RPM. Setelah ACK, matikan kontak, tunggu HV <30 V, lalu pasang JP_HV dan hidupkan mesin."
+            title = "5 • FIRST START AMAN (FIRMWARE R8)",
+            subtitle = "Mode aman: 220V, CENTER saja, advance ≤10°, limiter 3.000 RPM. Di R8, status otomatis tersimpan setelah stabil 3 detik dan otomatis READY setelah mesin berhenti atau boot berikutnya."
         ) {
-            CompactStatusRow("TARGET HV", "$firstStartHv V", firstStartHv <= 220)
-            CompactStatusRow("WAKTU HIDUP", "${t.firstStartSeconds} / 3 detik", ranLongEnough)
+            CompactStatusRow("TARGET TEGANGAN", "$firstStartHv V", firstStartHv <= 220)
+            CompactStatusRow("DURASI STABIL", "${t.firstStartSeconds} / 3 detik", ranLongEnough)
+            CompactStatusRow("STATUS OTOMATIS R8", if (ranLongEnough) "TERPENUHI (≥3s) • OTOMATIS READY SAAT MATI" else "MENUNGGU STABIL (${t.firstStartSeconds}/3s)", ranLongEnough)
             CompactStatusRow("RPM SEKARANG", "${t.rpm}", t.rpm == 0)
             CompactStatusRow("HV CENTER / SIDE", "${t.hvCenter} / ${t.hvSide} V", stoppedAndSafe)
             Button(
@@ -350,13 +563,13 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry) {
         }
 
         StageCard(
-            title = "SELESAIKAN KONFIGURASI AWAL",
+            title = "STATUS READY R8 (OTOMATIS / MANUAL)",
             subtitle = if (!ranLongEnough) {
-                "Tombol READY terbuka setelah mesin terdeteksi hidup stabil sedikitnya 3 detik."
+                "Hidupkan mesin pada idle selama 3 detik. Firmware R8 akan otomatis mengunci kalibrasi aman."
             } else if (!stoppedAndSafe) {
-                "Matikan melalui kill switch, tunggu RPM 0 dan kedua HV <30 V."
+                "Mesin telah stabil 3 detik! Matikan mesin (RPM 0 & HV <30 V) untuk transisi otomatis ke READY."
             } else {
-                "Syarat terpenuhi. Simpan READY CENTER sebagai konfigurasi awal yang aman."
+                "Syarat terpenuhi. Sistem otomatis beralih ke READY (atau Anda dapat menekan simpan manual di bawah)."
             }
         ) {
             Button(
@@ -367,7 +580,7 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry) {
                 shape = RoundedCornerShape(8.dp)
             ) { Text("SIMPAN READY • CENTER SAJA", color = CarbonDark, fontWeight = FontWeight.Bold) }
             Text(
-                "READY 3 busi tidak ditebak pada konfigurasi awal. Pengaturan SIDE tetap tersedia di Wiring → Komisi CDI setelah offset SIDE benar-benar diukur.",
+                "Di Firmware R8: Setelah stabil 3 detik, saat mesin berhenti atau boot berikutnya CDI otomatis berstatus READY.",
                 color = TextMuted,
                 fontSize = 9.sp,
                 lineHeight = 12.sp,

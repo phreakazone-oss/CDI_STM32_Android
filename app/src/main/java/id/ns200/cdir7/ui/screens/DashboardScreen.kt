@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.FirmwareRunMode
 import id.ns200.cdir7.ui.theme.*
 import kotlin.math.*
 
@@ -47,6 +48,9 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val packetRate by viewModel.packetRateHz.collectAsState()
     val crcPercent by viewModel.crcValidPercent.collectAsState()
     val telemetryPacketCount by viewModel.telemetryPacketCount.collectAsState()
+    val fwMode by viewModel.firmwareMode.collectAsState()
+    val targetHv by viewModel.targetHvVoltage.collectAsState()
+    val isPro by viewModel.isProVoltageConfigured.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
@@ -806,9 +810,8 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         4 -> MotecOrange
                         else -> SensorAmber
                     })
-                    TechDataRow("ARM tetap (PB3)", if (telemetry.armed) "READY (R_ARM terpasang)" else "LINK PB3 TERPUTUS", if (telemetry.armed) RacingLime else RaceRedline)
-                    TechDataRow("JP_HV (PB2)", if (telemetry.hvEnabled) "INSTALLED (HV ENABLED)" else "REMOVED (SAFE)", if (telemetry.hvEnabled) RacingLime else TextSecondary)
-                    TechDataRow("JP_PRO (PB4)", if (telemetry.proJumper) "UNLOCKED (16x8 290V)" else "LOCKED (8x4 285V)", if (telemetry.proJumper) ElectricCyan else TextMuted)
+                    TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) "BACA OEM PB3/PB4" else "MANUAL"})", ElectricCyan)
+                    TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
                     TechDataRow("OUTPUT COILS", "CENTER: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}", RacingLime)
                     TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
                     TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
