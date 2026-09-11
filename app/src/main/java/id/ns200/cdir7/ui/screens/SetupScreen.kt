@@ -931,13 +931,13 @@ private fun OemLearnSafetyWiringGuide() {
                                         "├───────────────────────────────┬─────────────────────────────┤\n" +
                                         "│  [TERMINAL INPUT KOIL OEM]   │    [TERMINAL OUTPUT WEACT]  │\n" +
                                         "│                               │                             │\n" +
-                                        "│  IN1+ ──[ R 47kΩ 2W ]── J1.12 │  OUT1 ──────▶ PB3 (H_TOP.9) │\n" +
-                                        "│         (Koil Center Oranye)  │               (Pulsa Center)│\n" +
+                                        "│  IN1+ ──[ R 47kΩ 2W ]── J1.9  │  OUT1 ──────▶ PB3 (H_TOP.9) │\n" +
+                                        "│       (Kabel Tambahan OEM Ctr)│               (Pulsa Center)│\n" +
                                         "│  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PB4 (H_TOP.8) │\n" +
                                         "│         (GND Motor Massa)     │               (Pulsa Side)  │\n" +
                                         "│                               │  OUT3 ──────  (Cadangan)    │\n" +
-                                        "│  IN2+ ──[ R 47kΩ 2W ]── J1.6  │  OUT4 ──────  (Cadangan)    │\n" +
-                                        "│         (Koil Side Htm-Mrh)   │                             │\n" +
+                                        "│  IN2+ ──[ R 47kΩ 2W ]── J1.8  │  OUT4 ──────  (Cadangan)    │\n" +
+                                        "│       (Kabel Tambahan OEM Side│                             │\n" +
                                         "│  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (WeAct)   │\n" +
                                         "│         (GND Motor Massa)     │  GND  ──────▶ GND (WeAct)   │\n" +
                                         "├───────────────────────────────┴─────────────────────────────┤\n" +
@@ -953,11 +953,12 @@ private fun OemLearnSafetyWiringGuide() {
 
                         Text(
                             text = "TUTORIAL SINGKAT & KEUNTUNGAN:\n" +
-                                    "1. Beli di Toko Online: Cari 'Modul Optocoupler PC817 4-Channel' (kisaran Rp 15.000 - Rp 25.000).\n" +
+                                    "1. Beli di Toko Online: Cari 'Modul Optocoupler PC817 4-Channel' (kisaran Rp 12.000 - Rp 18.000).\n" +
                                     "2. Pangkas 85% Solderan: Kabel cukup dikupas dan dikencangkan dengan obeng pada terminal baut sekrup.\n" +
                                     "3. Verifikasi Visual Langsung: LED1 & LED2 onboard akan berkedip saat koil memercik, membuktikan sinyal masuk tanpa osiloskop.\n" +
-                                    "4. WAJIB RESISTOR SERI 47kΩ 2W: Karena input koil mencapai 200V-400V, wajib pasang resistor 47kΩ 2 Watt pada kabel sebelum masuk ke IN1+ dan IN2+ agar modul tidak jebol!\n" +
-                                    "5. Jumper JP1-JP2: Pasang jumper pada posisi VCC agar output pull-up aktif ke 3.3V STM32.",
+                                    "4. PIN HARNESS J1.8 & J1.9: Di pabrik ditandai NC (kosong). Tambahkan 2 kabel probe pigtail ke pin J1.9 (OEM Center) dan pin J1.8 (OEM Side) untuk perekaman pasif.\n" +
+                                    "5. WAJIB RESISTOR SERI 47kΩ 2W: Karena input koil mencapai 200V-400V, wajib pasang resistor 47kΩ 2 Watt pada kabel sebelum masuk ke IN1+ dan IN2+ agar modul tidak jebol!\n" +
+                                    "6. Jumper JP1-JP2: Pasang jumper pada posisi VCC agar output pull-up aktif ke 3.3V STM32.",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,
@@ -995,24 +996,22 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "=== [1] MODUL BUCK STEP-DOWN DC-DC (MP1584EN / LM2596) ===\n" +
-                                        "• Menggantikan: Regulator LM7805 panas & elko besar.\n" +
-                                        "• Fungsi: Ubah +12V kontak (J1.5) -> stabil 5.0V DC dingin (efisiensi 92%).\n" +
+                                text = "=== [1] MODUL BUCK STEP-DOWN DC-DC (LM2596 / MP1584EN) ===\n" +
+                                        "• Menggantikan: Regulator linear panas & elko besar.\n" +
+                                        "• Fungsi: Ubah +12V kontak (J1.5) -> stabil 5.0V DC dingin untuk Logic WeAct STM32.\n" +
                                         "• Wiring: IN+ ke J1.5, IN- ke J1.11 (GND), OUT+ ke Pin 5V WeAct, OUT- ke GND.\n\n" +
-                                        "=== [2] MODUL HV BOOST CONVERTER 8V-32V KE 45V-390V (ZVS 40W/70W) ===\n" +
-                                        "• Menggantikan: Boost flyback diskrit & trafo lilitan manual.\n" +
-                                        "• Fungsi: Pengecas kapasitor CDI (1.5uF - 2.2uF 450V MKP).\n" +
-                                        "• Voltase R8: Set trimpot ke 285V (Normal) atau 345V (Mode PRO).\n" +
-                                        "• Wiring: VIN ke +12V kontak, VOUT+ seri dioda UF4007 ke Kapasitor HV & Koil.\n\n" +
-                                        "=== [3] MODUL PULSER KOMPARATOR (LM393 SPEED SENSOR MODULE) ===\n" +
-                                        "• Menggantikan: Sirkuit conditioning pulser diskrit LM339.\n" +
-                                        "• Fungsi: Ubah pulsa pick-up spul J1.10 jadi sinyal digital kotak 0-3.3V.\n" +
-                                        "• Fitur: Trimpot sensitivitas & LED kedip putaran mesin.\n" +
-                                        "• Wiring: VCC ke 3V3, GND ke GND, IN ke J1.10 (Putih-Merah), OUT ke Pin PA0.\n\n" +
-                                        "=== [4] MODUL RELAY 1-CH OPTOISOLATED / MOSFET DRIVER LR7843 ===\n" +
-                                        "• Menggantikan: Sirkuit transistor driver kipas BC547.\n" +
-                                        "• Fungsi: Driver relay kipas radiator J1.7 (Biru-Kuning) via Pin PB5.\n" +
-                                        "• Fitur: Terisolasi optik, proteksi lonjakan arus induksi motor kipas.",
+                                        "=== [2] MODUL OPTOCOUPLER PC817 4-CHANNEL (REKOMENDASI UTAMA #1) ===\n" +
+                                        "• Menggantikan: Desain diskrit solderan PC817 / voltage divider terpisah.\n" +
+                                        "• Fungsi: Isolasi optik aman tegangan tinggi OEM Learn Center (J1.9 ke PB3) dan Side (J1.8 ke PB4).\n" +
+                                        "• Fitur: Sekrup baut, LED indikator pulsa percikan koil, isolasi tegangan 5000V.\n\n" +
+                                        "=== [3] MODUL RELAY 1-CHANNEL 5V + OPTOCOUPLER (REKOMENDASI UTAMA #2) ===\n" +
+                                        "• Menggantikan: Rangkaian transistor diskrit BC547, resistor base, & dioda flyback.\n" +
+                                        "• Fungsi: Driver relay kipas radiator J1.7 via pin PB5 langsung.\n" +
+                                        "• Wiring: VCC ke 5V LM2596, GND ke GND_STAR, IN ke PB5, COM ke J1.7, NO ke GND.\n\n" +
+                                        "=== CATATAN MODUL YANG SUDAH DIUJI & DITOLAK (JANGAN DIGUNAKAN) ===\n" +
+                                        "• Modul Boost 12V->300-1200V: Arus hanya 2-20mA (kurang untuk 3 busi 10k RPM butuh 100mA+) dan tidak bisa PWM firmware.\n" +
+                                        "• Modul Bridge Rectifier Generik: Didesain untuk PLN 50/60Hz, panas drop pada switching 100kHz trafo ATX.\n" +
+                                        "• Modul Sensor Tegangan: Rasio pembagi resistor tidak presisi untuk ADC 3.3V firmware.",
                                 color = RacingLime,
                                 fontSize = 7.5.sp,
                                 lineHeight = 10.5.sp,
@@ -1021,9 +1020,9 @@ private fun OemLearnSafetyWiringGuide() {
                         }
 
                         Text(
-                            text = "RINGKASAN KEUNTUNGAN MODULAR:\n" +
-                                    "• Pembuatan CDI menjadi sistem rakitan blok modul (Plug & Play).\n" +
-                                    "• Jika ada blok rusak (misal modul buck atau boost), tinggal lepas terminal baut dan ganti modul baru dalam 2 menit tanpa solder ulang!",
+                            text = "KESIMPULAN MODULARITAS v8.1 (NOL PCB CUSTOM):\n" +
+                                    "• Cukup gunakan 2 modul jadi: Modul PC817 4-CH & Modul Relay 1-CH 5V.\n" +
+                                    "• Jalur harness motor 12-pin (J1) tetap dipertahankan penuh, perakitan cepat bebas pusing!",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,

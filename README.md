@@ -70,20 +70,40 @@ Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, s
 
 ### Ringkasan Blok Fungsi & Modul Pengganti
 
-| Blok Fungsi CDI | Komponen Diskrit Lama | Modul Pasaran Siap Pakai | Estimasi Harga | Keuntungan Utama |
+> **FILOSOFI MODULAR v8.1**: Rekomendasi utama berfokus pada **2 MODUL JADI PASARAN (NOL PCB CUSTOM)** yang memangkas perakitan paling rumit, sementara blok yang kritis tetap mempertahankan performa komponen teruji.
+
+| Blok Fungsi CDI | Status Rekomendasi | Modul Pasaran Siap Pakai | Estimasi Harga | Alasan Teknis & Keuntungan Utama |
 |---|---|---|---|---|
-| **1. OEM Learn Signal Isolator** (Input PB3 & PB4) | 2x IC PC817 + 2x 1N4148 + resistor pull-up perfboard | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 15.000 – Rp 25.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 3000V. |
-| **2. Catu Daya Logic 5V** (+12V Kontak ke +5V WeAct) | Regulator linear LM7805 + heatsink besar + elko 100uF | **Modul Mini DC-DC Buck Step-Down MP1584EN** (atau LM2596 Mini) | Rp 8.000 – Rp 15.000 | Efisiensi 92-96% (sangat dingin), ukuran ultra-mini (22x17mm), stabil di 5.0V meski aki drop saat starter. |
-| **3. Pengecas Kapasitor HV** (12V ke 285V / 345V PRO) | Trafo ferit lilitan manual + UC3843 PWM + MOSFET IRF3205 push-pull | **Modul DC-DC High Voltage Boost Converter 8V–32V to 45V–390V** (ZVS Cap Charger 40W/70W) | Rp 45.000 – Rp 75.000 | Heatsink terpasang, trimpot multi-turn presisi, arus konstan aman untuk kapasitor discharge 1.5–2.2µF 450V MKP. |
-| **4. Pengkondisi Pulser Spul** (Input Magnet J1.10 ke PA0) | IC LM339 diskrit + pembagi tegangan + filter RC | **Modul Komparator LM393 Speed Sensor / Voltage Comparator** | Rp 6.000 – Rp 12.000 | Trimpot penyetel sensitivitas trigger (0.5V–2.5V), LED visual kedip setiap tonjolan magnet lewat. |
-| **5. Driver Relay Kipas** (J1.7 / PB5 Radiator Fan) | Transistor BC547 + Dioda 1N4007 + resistor gate diskrit | **Modul Relay 1-Channel 5V dengan Optocoupler** (atau MOSFET Driver LR7843) | Rp 9.000 – Rp 15.000 | Terisolasi optik penuh, terminal baut, meredam lonjakan arus induksi motor kipas radiator. |
+| **1. OEM Learn Signal Isolator** (Input PB3 & PB4) | ⭐ **SANGAT DIREKOMENDASIKAN #1** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 12.000 – Rp 18.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 5000V. Cukup 1 modul untuk dua kanal sekaligus: PB3 (OEM_CTR ← J1.9) dan PB4 (OEM_SIDE ← J1.8). |
+| **2. Driver Relay Kipas** (J1.7 / PB5 Radiator Fan) | ⭐ **SANGAT DIREKOMENDASIKAN #2** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Rp 8.000 – Rp 14.000 | Menggantikan transistor BC547 diskrit. Pin PB5 WeAct langsung masuk ke pin `IN` modul. Sudah ada optoisolator, dioda flyback proteksi lonjakan motor kipas, dan terminal sekrup. |
+| **3. Catu Daya Logic 5V** (+12V Kontak ke +5V WeAct) | Alternatif Opsional | **Modul Mini DC-DC Buck MP1584EN / LM2596** | Rp 8.000 – Rp 15.000 | Menggantikan regulator linear panas. Menghasilkan 5.0V DC dingin & stabil untuk board WeAct STM32. |
 
 ---
 
-### Detail Pemasangan Modul Populer
+### ⚠️ Evaluasi Modul Pasaran yang DITOLAK (JANGAN DIGUNAKAN)
+
+Setelah pengujian teknis mendalam terhadap karakteristik CDI kapasitif DTS-i, modul-modul berikut **TIDAK DIREKOMENDASIKAN**:
+
+1. ❌ **Modul Boost Converter 12V → 300–1200V untuk Charge Pump HV**:
+   - **Penyebab**: Kemampuan arus keluaran modul pasaran ini rata-rata hanya **2 – 20 mA**. Untuk sistem pengapian 3 busi (Triple Spark) pada putaran tinggi (10.000 RPM), sistem membutuhkan arus pengisian kapasitor minimal **80 – 120 mA**. Arus 2–20 mA tidak akan mampu mengisi kapasitor tepat waktu sehingga pengapian akan drop / misfire parah di putaran menengah ke atas. Selain itu, modul boost generik tidak memiliki pin kontrol PWM dari firmware STM32 untuk switching dinamis level tegangan 285V (Normal) dan 345V (Mode PRO).
+2. ❌ **Modul Bridge Rectifier Generik**:
+   - **Penyebab**: Modul penyearah jembatan generik di pasaran dirancang untuk frekuensi jala-jala listrik PLN (50/60 Hz), bukan frekuensi switching tinggi trafo frekuensi tinggi ATX/flyback (~100 kHz). Jika dipaksakan, dioda akan mengalami panas ekstrem (*thermal breakdown*) dan *forward voltage drop* yang tinggi. Gunakan dioda ultrafast diskrit seperti **UF4007** (trr < 75ns).
+3. ❌ **Modul SCR / Dimmer AC**:
+   - **Penyebab**: Rangkaian gerbang pemicu pada modul dimmer AC dirancang untuk arus bolak-balik AC 220V frekuensi rendah. Tidak responsif untuk pulsa trigger mikrodetik (60–100 µs) discharge kapasitor CDI DC. Tetap gunakan thyristor **BT151-800R** atau **TYN612**.
+4. ❌ **Modul Sensor Tegangan Generik (Voltage Divider Module)**:
+   - **Penyebab**: Modul sensor tegangan pasaran umumnya menggunakan rasio pembagi tetap (misal 5:1 untuk Arduino 5V 0–25V). Rasio ini tidak cocok dan tidak presisi untuk kalibrasi ADC 3.3V firmware STM32 pada pembacaan feedback tegangan HV (300V+), TPS, maupun sensor suhu NTC. Pembagi resistif terkalibrasi diskrit dengan dioda clamp pengaman **BAT54S** jauh lebih presisi dan aman.
+
+---
+
+### Detail Pemasangan 2 Modul Rekomendasi Utama
 
 #### 1. Modul Optocoupler PC817 4-Channel (OEM Training / Learn)
-Modul ini digunakan untuk membaca sinyal timing koil pengapian CDI OEM secara aman tanpa membakar mikrokontroler STM32WB55.
+Modul ini digunakan untuk membaca sinyal timing koil pengapian CDI OEM secara pasif dan aman tanpa risiko merusak mikrokontroler STM32WB55.
+
+> **Catatan Harness J1.8 & J1.9**:
+> Pada soket harness motor NS200 asli dari pabrik, pin **J1.8** dan **J1.9** ditandai sebagai **NC (kosong)**. Untuk alur OEM Learn, pasang 2 kabel tambahan (*pigtail probe*):
+> - **J1.9** ➔ Sinyal pulsa koil Center OEM (masuk ke IN1+ modul PC817 via R 47kΩ 2W).
+> - **J1.8** ➔ Sinyal pulsa koil Side OEM (masuk ke IN2+ modul PC817 via R 47kΩ 2W).
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -91,13 +111,13 @@ Modul ini digunakan untuk membaca sinyal timing koil pengapian CDI OEM secara am
 ├───────────────────────────────┬─────────────────────────────┤
 │  [TERMINAL INPUT KOIL OEM]   │    [TERMINAL OUTPUT WEACT]  │
 │                               │                             │
-│  IN1+ ──[ R 47kΩ 2W ]── J1.12 │  OUT1 ──────▶ PB3 (H_TOP.9) │
-│         (Koil Center Oranye)  │               (Pulsa Center)│
+│  IN1+ ──[ R 47kΩ 2W ]── J1.9  │  OUT1 ──────▶ PB3 (H_TOP.9) │
+│       (Kabel Tambahan OEM Ctr)│               (Pulsa Center)│
 │  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PB4 (H_TOP.8) │
 │         (GND Motor Massa)     │               (Pulsa Side)  │
 │                               │  OUT3 ──────  (Cadangan)    │
-│  IN2+ ──[ R 47kΩ 2W ]── J1.6  │  OUT4 ──────  (Cadangan)    │
-│         (Koil Side Htm-Mrh)   │                             │
+│  IN2+ ──[ R 47kΩ 2W ]── J1.8  │  OUT4 ──────  (Cadangan)    │
+│       (Kabel Tambahan OEM Side│                             │
 │  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (WeAct)   │
 │         (GND Motor Massa)     │  GND  ──────▶ GND (WeAct)   │
 ├───────────────────────────────┴─────────────────────────────┤
@@ -107,22 +127,22 @@ Modul ini digunakan untuk membaca sinyal timing koil pengapian CDI OEM secara am
 ```
 
 **Langkah & Tutorial Singkat**:
-1. Pasang Resistor **47 kΩ 2 Watt** (wajib daya besar!) secara seri pada kabel sebelum masuk ke terminal `IN1+` dan `IN2+` untuk membatasi lonjakan tegangan 200V–400V dari koil primer CDI OEM.
-2. Hubungkan terminal `IN1-` dan `IN2-` ke Ground massa motor (`J1.11 GND`).
+1. Siapkan 2 buah Resistor **47 kΩ 2 Watt** (wajib daya besar 2 Watt). Pasang secara seri pada kabel sebelum masuk ke terminal `IN1+` dan `IN2+` untuk menahan spike tegangan 200V–400V dari pulsa koil pengapian.
+2. Sambungkan terminal `IN1-` dan `IN2-` ke Ground massa motor (`J1.11 GND`).
 3. Beri daya modul sisi output dengan menyambungkan `VCC` ke Pin **3V3** WeAct dan `GND` ke Pin **GND** WeAct.
-4. Pasang jumper JP1 & JP2 modul pada posisi **VCC** (pull-up internal aktif).
+4. Pasang jumper JP1 & JP2 modul pada posisi **VCC** (pull-up internal aktif ke 3.3V).
 5. Sambungkan terminal `OUT1` ke Pin **PB3 (H_TOP.9)** dan `OUT2` ke Pin **PB4 (H_TOP.8)**.
 6. Saat mesin dihidupkan dengan CDI OEM, LED1 dan LED2 pada modul akan berkedip mengikuti percikan busi, dan counter pulsa di aplikasi Android akan bergerak naik!
 
-#### 2. Modul Mini DC-DC Buck Step-Down MP1584EN (+12V ke +5V)
-- **Input (`IN+` & `IN-`)**: Sambungkan ke kabel kontak +12V (`J1.5 Cokelat`) via sekring 1A/2A, dan Ground (`J1.11 Hitam-Kuning`).
-- **Kalibrasi**: Sebelum disambung ke WeAct, beri daya 12V dan putar trimpot obeng hingga output tepat terukur **5.00 Volt DC**.
-- **Output (`OUT+` & `OUT-`)**: Sambungkan ke Pin **5V** WeAct (H_BOTTOM.2) atau potong kabel colokan USB-C ke WeAct, dan Ground ke Pin **G** WeAct (H_TOP.1).
-
-#### 3. Modul High Voltage Boost Converter 8V–32V to 45V–390V (ZVS Cap Charger)
-- **Input**: Sambungkan ke +12V kontak aki (lewat saklar pengaman / relay).
-- **Output**: Putar trimpot multi-turn hingga voltmeter membaca **285 V** (mode Normal) atau **345 V** (mode Pro).
-- Hubungkan `VOUT+` melewati dioda ultrafast **UF4007** menuju kapasitor pengapian (1.5µF–2.2µF 450V MKP) dan SCR pengapian Center (PA1) & Side (PA2).
+#### 2. Modul Relay 1-Channel 5V + Optocoupler (Kipas Radiator J1.7)
+Modul ini menggantikan sirkuit transistor diskrit BC547:
+- **`VCC`**: Sambungkan ke output +5V (dari modul buck LM2596 / pin 5V WeAct).
+- **`GND`**: Sambungkan ke GND_STAR motor (J1.11).
+- **`IN`**: Sambungkan langsung ke Pin **PB5** WeAct STM32 (H_TOP.7). Modul sudah memiliki resistor base dan optoisolator internal.
+- **Terminal Relay**:
+  - `COM`: Sambungkan ke kabel relay kipas motor **J1.7 (Biru-Kuning)**.
+  - `NO` (*Normally Open*): Sambungkan ke **GND Massa Motor**.
+  - Saat suhu mesin mencapai ambang batas atau mode Fan `ON`, MCU akan memicu PB5 ➔ relay menutup ➔ kipas radiator menyala aman.
 
 ---
 

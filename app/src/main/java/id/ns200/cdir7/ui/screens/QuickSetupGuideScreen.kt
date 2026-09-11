@@ -131,13 +131,14 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
         // Sub-Tabs
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             listOf(
-                "1. Alur Setup",
-                "2. Harness J1",
-                "3. Pin WeAct",
-                "4. BOM Belanja"
+                "1. Alur",
+                "2. J1",
+                "3. WeAct",
+                "4. BOM",
+                "5. Modul"
             ).forEachIndexed { index, title ->
                 val isSel = selectedTab == index
                 Box(
@@ -167,6 +168,7 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
             1 -> HarnessJ1View(viewModel, j1ConfirmedMap)
             2 -> WeActHeaderView()
             3 -> BomShoppingView()
+            4 -> ModularGuideView()
         }
     }
 }
@@ -293,7 +295,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             ) {
                 Text(
                     text = "• Sebelum mulai: kill switch OFF harus membuat J1.5 = 0V.\n" +
-                            "• Pastikan kontak/kill switch OFF, jumper JP_HV lepas dan HV < 30V.\n" +
+                            "• Pastikan kontak/kill switch OFF, interlock software R8 aktif dan HV < 30V.\n" +
                             "• Setelah aman, kontak ON harus memberi sekitar 12V pada J1.5.\n" +
                             "• Starter mesin 2-3 detik tanpa HV untuk verifikasi komunikasi BLE.",
                     fontSize = 11.sp,
@@ -878,11 +880,11 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
         HarnessPinItem("J1.4", "Abu-abu", "TPS_B", "H_BOTTOM.12 (PA3) / H_BOTTOM.14 (PA5)", "J_TPS pin3+pin4 -> TPS_REF atau TPS_SIG", "CONFIRM TPS", isWarning = true),
         HarnessPinItem("J1.5", "+12V kontak", "+12V Kontak", "VIN_PROT / FMAIN5A", "FMAIN5A--DREV--VIN_PROT--L47uH--VIN_FILT (ke FLOGIC dan FHV)", "AKTIF"),
         HarnessPinItem("J1.6", "Hitam-merah", "COIL_SIDE", "H_BOTTOM.11 (PA2 via QNS/QPS)", "Terminal B koil SIDE. SCR2 anode HV_SIDE, cathode GND", "OFFSET WAJIB", isWarning = true),
-        HarnessPinItem("J1.7", "Biru-kuning", "FAN_RELAY", "H_TOP.7 (PB5 via QFAN BC547)", "Collector QFAN BC547; base 4.7k dari PB5 dan 10k ke GND", "CONFIRM POLARITAS", isWarning = true),
-        HarnessPinItem("J1.8", "NC", "NC", "Tidak Disambung", "Kosong", "KOSONG"),
-        HarnessPinItem("J1.9", "NC", "NC", "Tidak Disambung", "Kosong", "KOSONG"),
-        HarnessPinItem("J1.10", "Putih-merah", "PULSER", "H_BOTTOM.9 (PA0 TIM2_CH1)", "39k--PICKUP_SENSE; clamp BAT54S; LM339 pin5; pullup 4.7k ke 3V3", "CONFIRM EDGE/OFFSET", isWarning = true),
-        HarnessPinItem("J1.11", "Hitam-kuning", "GND", "H_BOTTOM.1 G / H_TOP.1 G", "GND_STAR ke logic & power, LM339 pin12 dan G board", "AKTIF"),
+        HarnessPinItem("J1.7", "Biru-kuning", "FAN_RELAY", "H_TOP.7 (PB5 via Modul Relay / BC547)", "Modul Relay 1-CH 5V pin IN / Kolektor QFAN; coil relay ke +12V kontak", "MODUL PASARAN / DISKRIT", isWarning = true),
+        HarnessPinItem("J1.8", "NC (Pabrik) / OEM_SIDE", "OEM_SIDE", "H_TOP.8 (PB4 via PC817)", "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> PB4", "PROBE OEM SIDE R8"),
+        HarnessPinItem("J1.9", "NC (Pabrik) / OEM_CTR", "OEM_CTR", "H_TOP.9 (PB3 via PC817)", "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> PB3", "PROBE OEM CENTER R8"),
+        HarnessPinItem("J1.10", "Putih-merah", "PULSER", "H_BOTTOM.9 (PA0 TIM2_CH1)", "39k--PICKUP_SENSE atau Modul Komparator LM393 DOUT ke PA0", "CONFIRM EDGE/OFFSET", isWarning = true),
+        HarnessPinItem("J1.11", "Hitam-kuning", "GND", "H_BOTTOM.1 G / H_TOP.1 G", "GND_STAR ke logic & power, modul opto/relay GND, dan G board", "AKTIF"),
         HarnessPinItem("J1.12", "Koil Center", "COIL_CENTER", "H_BOTTOM.10 (PA1 via QNC/QPC)", "Terminal B koil CENTER. SCR1 anode HV_CENTER, cathode GND", "FIRST START & READY")
     )
 
@@ -1045,16 +1047,16 @@ private fun WeActHeaderView() {
         WeActPinItem("16", "PA7", "Input", "HV_SIDE--4x270k--HV_S_FB--1k--PA7", "ADC HV SIDE - AKTIF"),
         WeActPinItem("17", "PA8", "-", "Tidak dipakai", "CADANGAN"),
         WeActPinItem("18", "PA9", "Output", "PA9--1k--TC4427 pin2 INA / QHV1 gate", "TIM1_CH2 - AKTIF"),
-        WeActPinItem("19", "PB2", "Input", "VIN_HV--100k--HV_PRESENT--1k--PB2", "JP_HV sense - AKTIF"),
+        WeActPinItem("19", "PB2", "Input", "VIN_HV Sense (pembagi 100k/1k)", "Software Interlock R8 - AKTIF"),
         WeActPinItem("20", "GND", "Input", "GND_STAR", "Board GND - AKTIF")
     )
 
     val topPins = listOf(
         WeActPinItem("1", "GND", "Input", "GND_STAR", "Board GND - AKTIF"),
-        WeActPinItem("3", "3V3", "Output", "Hanya pullup/clamp/interlock", "Bukan sumber beban besar - AKTIF"),
-        WeActPinItem("7", "PB5", "Output", "PB5--4.7k--QFAN base -> J1.7", "FAN relay sink - CONFIRM SEBELUM AKTIF"),
-        WeActPinItem("8", "PB4", "Input", "PB4: Monitor OEM Side (R8 Learn) / JP_PRO", "OEM Side monitor / config software"),
-        WeActPinItem("9", "PB3", "Input", "PB3: Monitor OEM Center (R8 Learn) / ARM", "OEM Center monitor / timing pasif"),
+        WeActPinItem("3", "3V3", "Output", "Hanya pullup/clamp/interlock/modul", "Bukan sumber beban besar - AKTIF"),
+        WeActPinItem("7", "PB5", "Output", "PB5 -> IN Modul Relay 5V / QFAN base", "FAN relay driver (Modul/Diskrit) - AKTIF"),
+        WeActPinItem("8", "PB4", "Input", "PB4: Monitor OEM Side (OUT2 PC817)", "OEM Side monitor / timing pasif R8 - AKTIF"),
+        WeActPinItem("9", "PB3", "Input", "PB3: Monitor OEM Center (OUT1 PC817)", "OEM Center monitor / timing pasif R8 - AKTIF"),
         WeActPinItem("11", "PA10", "Input", "PWM_CLAMP pullup 4.7k ke 3V3 (LOW=fault)", "Hardware fault - AKTIF"),
         WeActPinItem("12", "PE4", "Output", "LED onboard aktif-low", "Status - AKTIF"),
         WeActPinItem("14", "PB0", "Input", "VIN_FILT--100k--VBAT_ADC--1k--PB0", "ADC1_IN15 battery - AKTIF")
@@ -1190,17 +1192,18 @@ private fun PinRowCard(pin: WeActPinItem) {
 private fun BomShoppingView() {
     val boms = listOf(
         BomItem("LOGIC", "U1", "1", "WeAct STM32WB55CGU6", "Sudah dimiliki", "WAJIB satu-satunya MCU + BLE"),
+        BomItem("MODUL", "MOD_PC817", "1", "Modul Optocoupler PC817 4-Channel", "Beli baru (Rp12-18rb)", "OEM Learn (PB3 J1.9 & PB4 J1.8). Seri R 47k 2W"),
+        BomItem("MODUL", "MOD_RELAY", "1", "Modul Relay 1-Channel 5V + Opto (High/Low)", "Beli baru (Rp6-12rb)", "Driver Kipas Radiator J1.7 (PB5). Pengganti BC547 diskrit"),
         BomItem("POWER", "PCB_POWER", "1", "PCB lubang minimal 5x7cm", "Beli baru", "Clearance HV >= 6mm, terpisah dari antena"),
         BomItem("POWER", "T1", "1", "Trafo utama ATX lilitan 5V CT utuh", "PSU PC bekas", "WAJIB; tidak dibuka/tidak dililit"),
-        BomItem("LOGIC", "U2", "1", "LM339N / KA339 DIP-14 5V", "PSU / Beli", "Komparator pulser & overvoltage"),
+        BomItem("LOGIC", "U2", "1", "LM339N / KA339 DIP-14 5V (atau modul LM393)", "PSU / Beli", "Komparator pulser & overvoltage"),
         BomItem("LOGIC", "U_BUCK", "1", "Modul LM2596 adjustable (in >=35V, out 5V 1A)", "Beli baru", "Catu daya logic"),
         BomItem("POWER", "U4", "1", "TC4427A / TC4427CPA DIP-8", "Beli baru", "WAJIB; jangan ganti TC4427 non-A inverting"),
         BomItem("POWER", "QHV1-2", "2", "IRF3205 55V TO-220 asli", "PSU / Beli", "MOSFET push-pull trafo HV"),
         BomItem("POWER", "SCR1-2", "2", "BT151-600R 600V TO-220", "Beli baru", "Thyristor pemicu koil CENTER & SIDE"),
         BomItem("HV", "C_CAP", "2", "1uF 630V Polypropylene Pulse MKP/MPP", "Beli baru", "WAJIB polypropylene pulse; bukan elko/X2!"),
         BomItem("HV", "DREC1-4", "4", "UF4007 1A 1000V ultrafast", "Beli baru", "Bridge penyearah trafo HV"),
-        BomItem("CONTROL", "R_ARM", "1", "Resistor 1k 0.25W sebagai link tetap", "Kit resistor", "Menggantikan saklar ARM; kill switch memutus J1.5"),
-        BomItem("CONTROL", "JP_HV/PRO", "2", "Header 2-pin + jumper 2.54mm", "Beli baru", "Jumper HV & PRO unlock"),
+        BomItem("CONTROL", "SW_SVC", "1", "Switch toggle / jumper Service (opsional)", "Kit resistor", "Software Interlock R8 via firmware & BLE"),
         BomItem("HARNESS", "J1", "1", "Pigtail pasangan soket CDI 12-pin NS200", "Donor / Beli", "WAJIB; jangan potong harness motor!")
     )
 
@@ -1218,14 +1221,14 @@ private fun BomShoppingView() {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "CATATAN MATERIAL & KOMPONEN KRITIS",
+                        text = "CATATAN MATERIAL & KOMPONEN KRITIS (MODUL PASARAN v8.1)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = SensorAmber,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "• Donor PSU hanya dipakai bila marking dan rating benar.\n• Kapasitor CDI harus polypropylene pulse 630V MKP/MPP; jangan gunakan elko atau X2!\n• PCB Power HV dipisah fisik minimal 6mm dari board logic dan antena.",
+                        text = "• Modul Jadi Pasaran: Modul PC817 4-CH & Modul Relay 1-CH 5V mengeliminasi PCB custom & solderan transistor rumit!\n• Kapasitor CDI: Wajib polypropylene pulse 630V MKP/MPP; jangan gunakan elko atau X2!\n• PCB Power HV: Dipisah fisik minimal 6mm dari board logic dan modul.",
                         fontSize = 10.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
@@ -1255,7 +1258,7 @@ private fun BomShoppingView() {
                                 text = "[${item.section}] ${item.ref} (Qty: ${item.qty})",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MotecOrange,
+                                color = if (item.section == "MODUL") RacingLime else MotecOrange,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -1281,8 +1284,176 @@ private fun BomShoppingView() {
                             .border(1.dp, BorderSubtle, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(item.source, fontSize = 9.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                        Text(item.source, fontSize = 9.sp, color = if (item.section == "MODUL") RacingLime else ElectricCyan, fontFamily = FontFamily.Monospace)
                     }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModularGuideView() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, RacingLime, RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "MODUL JADI PASARAN (ZERO PCB CUSTOM)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = RacingLime,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Rekomendasi 2 modul komersial siap pakai untuk menggantikan komponen diskrit, memotong waktu perakitan, dan mencegah kesalahan penyolderan.",
+                        fontSize = 10.sp,
+                        color = TextPrimary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+
+        // Modul 1: PC817 4-Channel
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "1. MODUL OPTOCOUPLER PC817 4-CHANNEL",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricCyan,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Fungsi: Isolasi HV OEM Training (Center & Side). 1 board modul menangani kedua kanal sekaligus.",
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "KONEKSI KABEL:\n" +
+                                    "• Sisi Input:\n" +
+                                    "  - IN1+ : Kabel tambahan J1.9 (OEM Center) via Resistor 47kΩ 2W\n" +
+                                    "  - IN1- : Ground Motor / Frame\n" +
+                                    "  - IN2+ : Kabel tambahan J1.8 (OEM Side) via Resistor 47kΩ 2W\n" +
+                                    "  - IN2- : Ground Motor / Frame\n" +
+                                    "• Sisi Output (Mikro):\n" +
+                                    "  - VCC  : 3.3V WeAct\n" +
+                                    "  - GND  : GND WeAct (GND_STAR)\n" +
+                                    "  - OUT1 : PB3 STM32WB55 (OEM Center Capture)\n" +
+                                    "  - OUT2 : PB4 STM32WB55 (OEM Side Capture)",
+                            fontSize = 9.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = RacingLime,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Modul 2: Modul Relay 1-Channel 5V
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "2. MODUL RELAY 1-CHANNEL 5V + OPTOCOUPLER",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricCyan,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Fungsi: Driver Fan Radiator J1.7. Menggantikan transistor diskrit BC547, diode flyback 1N4007, dan resistor base.",
+                        fontSize = 10.sp,
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "KONEKSI KABEL:\n" +
+                                    "• Sisi Kontrol:\n" +
+                                    "  - VCC : 5.0V (dari LM2596)\n" +
+                                    "  - GND : GND_STAR WeAct\n" +
+                                    "  - IN  : Pin PB5 STM32WB55 langsung (Active-High/Low setting jumper)\n" +
+                                    "• Sisi Kontak Relay (Terminal Blok):\n" +
+                                    "  - COM : Pin J1.7 (Relay Kipas Radiator Motor)\n" +
+                                    "  - NO  : GND Motor / Frame\n" +
+                                    "  - NC  : Dibiarkan terbuka",
+                            fontSize = 9.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = RacingLime,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Modul yang DITOLAK
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, RaceRedline.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = RaceRedline.copy(alpha = 0.05f)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "MODUL YANG SUDAH DIUJI TAPI DITOLAK (JANGAN DIBELI):",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RaceRedline,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "• Modul Boost HV 12V->300-1200V: Arus hanya 2-20mA (tidak cukup untuk 3 busi 10.000 RPM butuh >= 80-120mA), dan tegangan tidak bisa dikontrol switching PWM 285V/345V firmware.\n" +
+                                "• Modul Bridge Rectifier Generik: Didesain untuk frekuensi 50/60Hz PLN, panas dan drop tegangan pada frekuensi switching trafo 100kHz (Wajib gunakan ultrafast UF4007).\n" +
+                                "• Modul Voltage Sensor Generik: Rasio pembagi resistor tidak cocok dengan kalibrasi ADC 3.3V firmware STM32.",
+                        fontSize = 9.5.sp,
+                        color = TextPrimary,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 13.5.sp
+                    )
                 }
             }
         }
