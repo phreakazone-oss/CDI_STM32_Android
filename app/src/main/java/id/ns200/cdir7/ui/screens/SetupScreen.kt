@@ -54,11 +54,19 @@ fun SetupScreen(viewModel: CdiViewModel) {
             onSelect = viewModel::selectQuickSetupPage
         )
 
+        val fwMode by viewModel.firmwareMode.collectAsState()
+
         Box(modifier = Modifier.weight(1f)) {
             when (stage) {
                 SetupStage.BARU -> BaruStage(viewModel, telemetry)
                 SetupStage.PULSER -> PulserStage(viewModel, telemetry)
-                SetupStage.TDC -> StrobeScreen(viewModel)
+                SetupStage.TDC -> {
+                    if (fwMode == FirmwareRunMode.MANUAL) {
+                        StrobeScreen(viewModel)
+                    } else {
+                        OemLearnTdcCheckpointStage(viewModel, telemetry)
+                    }
+                }
                 SetupStage.TPS_CAL -> TpsStage(viewModel, telemetry)
                 SetupStage.FIRST_START -> FirstStartStage(viewModel, telemetry)
                 SetupStage.READY -> ReadyStage(viewModel, telemetry)
@@ -500,6 +508,110 @@ private fun PulserStage(viewModel: CdiViewModel, t: Telemetry) {
 }
 
 @Composable
+private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry) {
+    val pending by viewModel.setupCommandPending.collectAsState()
+    val isOemLearning by viewModel.isOemLearning.collectAsState()
+    val oemCenterPulses by viewModel.oemCenterPulses.collectAsState()
+    val oemSideSamples by viewModel.oemSideSamples.collectAsState()
+    val isOemUnpluggedConfirmed by viewModel.isOemUnpluggedConfirmed.collectAsState()
+
+    StageBody {
+        StageCard(
+            title = "3 • CHECKPOINT REKAM TIMING OEM (PB3/PB4)",
+            subtitle = "Jalur OEM Learn: Mesin dinyalakan menggunakan CDI bawaan motor. STM32 merekam pulsa pengapian secara pasif via PB3 & PB4. Strobo flywheel manual tidak diperlukan."
+        ) {
+            CompactStatusRow("PULSA OEM CENTER (PB3)", "$oemCenterPulses pulsa", oemCenterPulses > 0)
+            CompactStatusRow("SAMPEL OEM SIDE (PB4)", "$oemSideSamples sampel", oemSideSamples > 0)
+            CompactStatusRow("STATUS PEREKAMAN", if (isOemLearning) "SEDANG MEREKAM DARI CDI OEM..." else if (oemCenterPulses > 0) "TEREKAM (${oemCenterPulses} pulsa)" else "SIAP REKAM", isOemLearning || oemCenterPulses > 0)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    enabled = !isOemLearning && !pending,
+                    onClick = viewModel::startOemLearn,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("1. MULAI REKAM", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    enabled = isOemLearning && !pending,
+                    onClick = viewModel::stopOemLearn,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("2. SIMPAN & STOP", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        StageCard(
+            title = "CHECKPOINT: CABUT OUTPUT OEM",
+            subtitle = "Setelah pulsa terekam, matikan mesin dan cabut soket kabel OEM dari koil. CDI STM32 akan mengambil alih pengapian secara mandiri (Mode DIY)."
+        ) {
+            CompactStatusRow("STATUS SOKET OEM", if (isOemUnpluggedConfirmed) "TERCABUT (DIY MANDIRI AKTIF)" else "MENUNGGU PENCABUTAN", isOemUnpluggedConfirmed)
+
+            if (!isOemUnpluggedConfirmed) {
+                Button(
+                    enabled = !pending,
+                    onClick = viewModel::confirmOemUnplugged,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfacePanel, RoundedCornerShape(6.dp))
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("OEM DILAPASKAN • Mode DIY Siap Pengujian", color = RacingLime, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        StageCard(
+            title = "ALUR BERIKUTNYA",
+            subtitle = "Lanjutkan kalibrasi TPS jika belum dilakukan, atau langsung ke pengujian First Start."
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.selectQuickSetupPage(SetupStage.TPS_CAL.code) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("4. KALIBRASI TPS", fontSize = 10.sp, color = MotecOrange)
+                }
+                Button(
+                    enabled = isOemUnpluggedConfirmed,
+                    onClick = {
+                        viewModel.advanceSetupStage(SetupStage.FIRST_START.code)
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isOemUnpluggedConfirmed) RacingLime else SurfacePanel),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("5. FIRST START", fontSize = 10.sp, color = if (isOemUnpluggedConfirmed) CarbonDark else TextMuted, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun TpsStage(viewModel: CdiViewModel, t: Telemetry) {
     val pending by viewModel.setupCommandPending.collectAsState()
     val closed by viewModel.tpsClosedAdc.collectAsState()
@@ -742,20 +854,23 @@ private fun OemLearnSafetyWiringGuide() {
                 )
             }
 
-            // Tab Selector
+            // Tab Selector Scrollable
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 listOf(
-                    0 to "1. OPTOCOUPLER (100% AMAN)",
-                    1 to "2. DIVIDER + CLAMP",
-                    2 to "3. DAYA STM32 (+12V)"
+                    0 to "1. MODUL PC817 4-CH (PLUG & PLAY)",
+                    1 to "2. KATALOG MODUL PASARAN",
+                    2 to "3. OPTO DISKRIT (SOLDER)",
+                    3 to "4. DIVIDER + CLAMP",
+                    4 to "5. DAYA STM32 (+12V)"
                 ).forEach { (tabIdx, tabTitle) ->
                     val active = selectedTab == tabIdx
                     Surface(
                         modifier = Modifier
-                            .weight(1f)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { selectedTab = tabIdx },
                         color = if (active) ElectricCyan.copy(alpha = 0.2f) else SurfacePanel,
@@ -767,7 +882,7 @@ private fun OemLearnSafetyWiringGuide() {
                     ) {
                         Text(
                             text = tabTitle,
-                            modifier = Modifier.padding(vertical = 5.dp, horizontal = 2.dp),
+                            modifier = Modifier.padding(vertical = 5.dp, horizontal = 7.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             fontSize = 8.5.sp,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
@@ -781,7 +896,7 @@ private fun OemLearnSafetyWiringGuide() {
             // Konten Skema Sesuai Tab
             when (selectedTab) {
                 0 -> {
-                    // TAB 1: OPTOCOUPLER ISOLASI TOTAL
+                    // TAB 1: MODUL PC817 4-CHANNEL PLUG & PLAY (SOLUSI PASARAN TERBAIK)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -790,7 +905,143 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "METODE 1: ISOLASI TOTAL DENGAN OPTOCOUPLER (SANGAT DIREKOMENDASIKAN)",
+                            text = "MODUL OPTOCOUPLER PC817 4-CHANNEL (SIAP PAKAI DI PASARAN)",
+                            color = RacingLime,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Gunakan modul jadi di pasaran untuk menghilangkan kerumitan menyolder kaki IC optocoupler. Sudah dilengkapi sekrup terminal baut, LED indikator pulsa, dan jumper pull-up.",
+                            color = TextSecondary,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+
+                        // Diagram Visual Modul PC817 4-Channel
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "┌─────────────────────────────────────────────────────────────┐\n" +
+                                        "│       MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD     │\n" +
+                                        "├───────────────────────────────┬─────────────────────────────┤\n" +
+                                        "│  [TERMINAL INPUT KOIL OEM]   │    [TERMINAL OUTPUT WEACT]  │\n" +
+                                        "│                               │                             │\n" +
+                                        "│  IN1+ ──[ R 47kΩ 2W ]── J1.12 │  OUT1 ──────▶ PB3 (H_TOP.9) │\n" +
+                                        "│         (Koil Center Oranye)  │               (Pulsa Center)│\n" +
+                                        "│  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PB4 (H_TOP.8) │\n" +
+                                        "│         (GND Motor Massa)     │               (Pulsa Side)  │\n" +
+                                        "│                               │  OUT3 ──────  (Cadangan)    │\n" +
+                                        "│  IN2+ ──[ R 47kΩ 2W ]── J1.6  │  OUT4 ──────  (Cadangan)    │\n" +
+                                        "│         (Koil Side Htm-Mrh)   │                             │\n" +
+                                        "│  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (WeAct)   │\n" +
+                                        "│         (GND Motor Massa)     │  GND  ──────▶ GND (WeAct)   │\n" +
+                                        "├───────────────────────────────┴─────────────────────────────┤\n" +
+                                        "│ [LED1] [LED2] [LED3] [LED4]  • Indikator Kedip Pulsa        │\n" +
+                                        "│ [JP1]  [JP2]  [JP3]  [JP4]   • Jumper Output Level (Set VCC)│\n" +
+                                        "└─────────────────────────────────────────────────────────────┘",
+                                color = ElectricCyan,
+                                fontSize = 7.5.sp,
+                                lineHeight = 10.5.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Text(
+                            text = "TUTORIAL SINGKAT & KEUNTUNGAN:\n" +
+                                    "1. Beli di Toko Online: Cari 'Modul Optocoupler PC817 4-Channel' (kisaran Rp 15.000 - Rp 25.000).\n" +
+                                    "2. Pangkas 85% Solderan: Kabel cukup dikupas dan dikencangkan dengan obeng pada terminal baut sekrup.\n" +
+                                    "3. Verifikasi Visual Langsung: LED1 & LED2 onboard akan berkedip saat koil memercik, membuktikan sinyal masuk tanpa osiloskop.\n" +
+                                    "4. WAJIB RESISTOR SERI 47kΩ 2W: Karena input koil mencapai 200V-400V, wajib pasang resistor 47kΩ 2 Watt pada kabel sebelum masuk ke IN1+ dan IN2+ agar modul tidak jebol!\n" +
+                                    "5. Jumper JP1-JP2: Pasang jumper pada posisi VCC agar output pull-up aktif ke 3.3V STM32.",
+                            color = TextPrimary,
+                            fontSize = 8.5.sp,
+                            lineHeight = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                1 -> {
+                    // TAB 2: KATALOG MODUL PASARAN PENGGANTI SELURUH BLOK SISTEM CDI
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "KATALOG MODUL PASARAN (DROP-IN MODULAR SEMUA BLOK CDI)",
+                            color = MotecOrange,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Setiap blok fungsi sistem CDI R8 dapat digantikan oleh modul siap pakai di pasaran. Jalur kabel harness 12-pin (J1) motor tetap dipertahankan:",
+                            color = TextSecondary,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "=== [1] MODUL BUCK STEP-DOWN DC-DC (MP1584EN / LM2596) ===\n" +
+                                        "• Menggantikan: Regulator LM7805 panas & elko besar.\n" +
+                                        "• Fungsi: Ubah +12V kontak (J1.5) -> stabil 5.0V DC dingin (efisiensi 92%).\n" +
+                                        "• Wiring: IN+ ke J1.5, IN- ke J1.11 (GND), OUT+ ke Pin 5V WeAct, OUT- ke GND.\n\n" +
+                                        "=== [2] MODUL HV BOOST CONVERTER 8V-32V KE 45V-390V (ZVS 40W/70W) ===\n" +
+                                        "• Menggantikan: Boost flyback diskrit & trafo lilitan manual.\n" +
+                                        "• Fungsi: Pengecas kapasitor CDI (1.5uF - 2.2uF 450V MKP).\n" +
+                                        "• Voltase R8: Set trimpot ke 285V (Normal) atau 345V (Mode PRO).\n" +
+                                        "• Wiring: VIN ke +12V kontak, VOUT+ seri dioda UF4007 ke Kapasitor HV & Koil.\n\n" +
+                                        "=== [3] MODUL PULSER KOMPARATOR (LM393 SPEED SENSOR MODULE) ===\n" +
+                                        "• Menggantikan: Sirkuit conditioning pulser diskrit LM339.\n" +
+                                        "• Fungsi: Ubah pulsa pick-up spul J1.10 jadi sinyal digital kotak 0-3.3V.\n" +
+                                        "• Fitur: Trimpot sensitivitas & LED kedip putaran mesin.\n" +
+                                        "• Wiring: VCC ke 3V3, GND ke GND, IN ke J1.10 (Putih-Merah), OUT ke Pin PA0.\n\n" +
+                                        "=== [4] MODUL RELAY 1-CH OPTOISOLATED / MOSFET DRIVER LR7843 ===\n" +
+                                        "• Menggantikan: Sirkuit transistor driver kipas BC547.\n" +
+                                        "• Fungsi: Driver relay kipas radiator J1.7 (Biru-Kuning) via Pin PB5.\n" +
+                                        "• Fitur: Terisolasi optik, proteksi lonjakan arus induksi motor kipas.",
+                                color = RacingLime,
+                                fontSize = 7.5.sp,
+                                lineHeight = 10.5.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Text(
+                            text = "RINGKASAN KEUNTUNGAN MODULAR:\n" +
+                                    "• Pembuatan CDI menjadi sistem rakitan blok modul (Plug & Play).\n" +
+                                    "• Jika ada blok rusak (misal modul buck atau boost), tinggal lepas terminal baut dan ganti modul baru dalam 2 menit tanpa solder ulang!",
+                            color = TextPrimary,
+                            fontSize = 8.5.sp,
+                            lineHeight = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                2 -> {
+                    // TAB 3: OPTOCOUPLER ISOLASI TOTAL (SOLDER DISKRIT)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(6.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "METODE 3: ISOLASI TOTAL DENGAN IC OPTOCOUPLER DISKRIT (SOLDER)",
                             color = RacingLime,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -846,8 +1097,8 @@ private fun OemLearnSafetyWiringGuide() {
                         )
                     }
                 }
-                1 -> {
-                    // TAB 2: VOLTAGE DIVIDER + BAT54S CLAMP
+                3 -> {
+                    // TAB 4: VOLTAGE DIVIDER + BAT54S CLAMP
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -856,7 +1107,7 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "METODE 2: VOLTAGE DIVIDER + CLAMP DIODA (ALTERNATIF RESISTOR)",
+                            text = "METODE 4: VOLTAGE DIVIDER + CLAMP DIODA (ALTERNATIF RESISTOR)",
                             color = SensorAmber,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -909,8 +1160,8 @@ private fun OemLearnSafetyWiringGuide() {
                         )
                     }
                 }
-                2 -> {
-                    // TAB 3: CATU DAYA PENYALAAN STM32 SAAT MESIN HIDUP DENGAN CDI OEM
+                4 -> {
+                    // TAB 5: CATU DAYA PENYALAAN STM32 SAAT MESIN HIDUP DENGAN CDI OEM
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

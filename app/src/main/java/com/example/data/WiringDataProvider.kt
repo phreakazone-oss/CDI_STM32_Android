@@ -506,6 +506,7 @@ object WiringDataProvider {
         "Sesuai revisi R7.2/R8: saklar toggle fisik SW_ARM ditiadakan. Resistor tetap R_ARM 1k menjaga jalur PB3.",
         "Catatan Firmware R8: Logika interlock hardware JP_HV, SW_ARM, dan JP_PRO telah dihapus dari firmware R8.",
         "Di Firmware R8, pin PB3 & PB4 difungsikan untuk alur Mode OEM_LEARN membaca sinyal CDI OEM secara pasif (PB3 = OEM Center, PB4 = OEM Side).",
+        "PILIHAN MODUL JADI (PLUG & PLAY): Sangat disarankan memakai 'Modul Optocoupler PC817 4-Channel' dengan terminal sekrup baut untuk OEM Learn (PB3=Center, PB4=Side) tanpa perlu menyolder kaki IC kecil. Cukup tambahkan resistor seri 47k 2W di kabel koil sebelum masuk terminal IN1+ & IN2+.",
         "PERINGATAN OEM LEARN: DILARANG menyambung langsung kabel koil (J1.12 Center & J1.6 Side) ke PB3/PB4! Wajib gunakan Optocoupler PC817 (dengan resistor seri 47k 2W) atau Voltage Divider 100k:1.2k + Dioda Clamp BAT54S agar tegangan spike 400V tidak membakar STM32.",
         "Kontak motor atau kill switch pada J1.5 yang berfungsi menghidupkan dan mematikan sistem catu daya STM32.",
         "Pasang header 2-pin untuk JP_PRO di sisi yang mudah dijangkau dengan pinset.",
@@ -1195,4 +1196,70 @@ object WiringDataProvider {
     BomItem("b36", "PASSIVE", "C_SMALL", "1 set", "4.7nF 10nF 100nF 10uF keramik / film", "PSU + Beli baru", "WAJIB kapasitor filter & bypass", false),
     BomItem("b37", "HARNESS", "WIRE_HV", "1 set", "Kabel isolasi tegangan tinggi 600V + heat-shrink", "Beli baru", "WAJIB jauh dari antena & sensor pulser", false)
   )
+
+  /**
+   * Katalog Modul Jadi Pasaran (Commercial Off-The-Shelf Modules)
+   * Alternatif modular pengganti komponen diskrit untuk menyederhanakan perakitan CDI R8
+   * tanpa merubah kompatibilitas wiring harness 12-pin (J1).
+   */
+  val modularDropInModules: List<ModularDropInModule> = listOf(
+    ModularDropInModule(
+      id = "mod_opto_4ch",
+      blockName = "OEM Learn Pasif (PB3 & PB4)",
+      moduleName = "Modul Optocoupler PC817 4-Channel Isolation Board",
+      replacesDiscrete = "2x IC PC817 diskrit + 2x 1N4148 + 2x resistor pullup 4.7k di perfboard",
+      estimatedPriceIdr = "Rp 15.000 - Rp 25.000",
+      keyFeatures = "Terminal baut screw, 4x LED indikator pulsa kedip, jumper pull-up VCC onboard, isolasi optik 3000V",
+      wiringSummary = "Koil Center J1.12 seri R 47k 2W -> IN1+, Koil Side J1.6 seri R 47k 2W -> IN2+, IN1-/IN2- ke GND, OUT1 ke PB3, OUT2 ke PB4, VCC/GND ke WeAct 3V3/GND"
+    ),
+    ModularDropInModule(
+      id = "mod_buck_5v",
+      blockName = "Catu Daya Logic (+12V Kontak ke +5V WeAct)",
+      moduleName = "Modul Mini DC-DC Buck Converter MP1584EN / LM2596 Mini",
+      replacesDiscrete = "Regulator linear LM7805 panas + heatsink besar + kapasitor elko 100uF",
+      estimatedPriceIdr = "Rp 8.000 - Rp 15.000",
+      keyFeatures = "Efisiensi 92-96% (sangat dingin), ukuran ultra-mini 22x17mm, output 5.0V presisi (arus hingga 3A)",
+      wiringSummary = "IN+ ke J1.5 (+12V Kontak), IN- ke J1.11 (GND), OUT+ ke Pin 5V WeAct / Port USB-C, OUT- ke GND WeAct"
+    ),
+    ModularDropInModule(
+      id = "mod_hv_boost",
+      blockName = "Pengecas Kapasitor HV (12V ke 285V / 345V PRO)",
+      moduleName = "Modul High Voltage DC-DC Boost Converter 8V-32V ke 45V-390V (ZVS Cap Charger 40W/70W)",
+      replacesDiscrete = "Trafo ferit lilitan tangan diskrit + UC3843 PWM + MOSFET IRF3205 push-pull",
+      estimatedPriceIdr = "Rp 45.000 - Rp 75.000",
+      keyFeatures = "Heatsink aluminium terpasang, trimpot multi-turn presisi, arus konstan aman untuk kapasitor discharge 1.5-2.2uF 450V",
+      wiringSummary = "VIN+ ke +12V kontak (via saklar pengaman), VIN- ke GND, VOUT+ diatur ke 285V/345V seri dioda ultrafast UF4007 ke Kapasitor HV & Koil"
+    ),
+    ModularDropInModule(
+      id = "mod_pulser_comp",
+      blockName = "Pengkondisi Sinyal Pulser Spul Magnet (J1.10)",
+      moduleName = "Modul Komparator LM393 Speed Sensor / Voltage Comparator",
+      replacesDiscrete = "IC LM339 diskrit + resistor pembagi tegangan perfboard + filter RC",
+      estimatedPriceIdr = "Rp 6.000 - Rp 12.000",
+      keyFeatures = "Trimpot penyetel sensitivitas ambang batas tegangan (0.5V - 2.5V), LED kedip visual trigger tonjolan magnet",
+      wiringSummary = "VCC ke 3V3/5V WeAct, GND ke GND motor, Input ke J1.10 Pulser (Putih-Merah), Output langsung ke PA0 (TIM2_CH1) WeAct"
+    ),
+    ModularDropInModule(
+      id = "mod_fan_relay",
+      blockName = "Driver Relay Kipas Radiator (J1.7 / PB5)",
+      moduleName = "Modul Relay 1-Channel 5V dengan Optocoupler / Modul MOSFET Driver LR7843",
+      replacesDiscrete = "Transistor NPN BC547 diskrit + Dioda 1N4007 flyback + resistor gate",
+      estimatedPriceIdr = "Rp 9.000 - Rp 15.000",
+      keyFeatures = "Isolasi optik penuh, terminal screw output beban, anti lonjakan arus induktif motor kipas radiator",
+      wiringSummary = "VCC ke 5V WeAct, GND ke GND WeAct, IN ke PB5 WeAct. Terminal relay NO & COM menyambungkan kabel J1.7 (Biru-Kuning) ke GND aki"
+    )
+  )
 }
+
+/**
+ * Representasi modul jadi siap pakai di pasaran untuk upgrade sistem CDI R8 secara modular.
+ */
+data class ModularDropInModule(
+  val id: String,
+  val blockName: String,
+  val moduleName: String,
+  val replacesDiscrete: String,
+  val estimatedPriceIdr: String,
+  val keyFeatures: String,
+  val wiringSummary: String
+)

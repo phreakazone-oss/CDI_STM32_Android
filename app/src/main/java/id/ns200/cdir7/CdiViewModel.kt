@@ -221,6 +221,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _isProVoltageConfigured = MutableStateFlow(false)
     val isProVoltageConfigured: StateFlow<Boolean> = _isProVoltageConfigured.asStateFlow()
 
+    private val _mcuCapabilities = MutableStateFlow<Set<String>>(setOf("R8", "OEM_LEARN", "PRO_HV", "OTA"))
+    val mcuCapabilities: StateFlow<Set<String>> = _mcuCapabilities.asStateFlow()
+
     val otaState: StateFlow<OtaState> = bleClient.otaState
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
@@ -1361,11 +1364,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send(cmd)
-            appendLog("BLE Send: $cmd (Target HV: ${_targetHvVoltage.value}V)")
+            // Aktifkan fitur & muat profil R8 yang sesuai agar target aktual berpindah 285 V <-> 345 V
+            val currentSlot = _selectedMapSlot.value.coerceIn(0, 3)
+            bleClient.send("LOAD,$currentSlot")
+            bleClient.send("GET,SETUP")
+            bleClient.send("GET,STATUS")
+            appendLog("BLE Send: $cmd & LOAD,$currentSlot (Target HV aktual: ${_targetHvVoltage.value}V)")
         } else {
             appendLog("Tegangan HV diubah ke ${_targetHvVoltage.value}V (${if (proMode) "PRO" else "NORMAL"})")
         }
-        Toast.makeText(context, "Tegangan HV Target: ${_targetHvVoltage.value}V", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Target Tegangan HV: ${_targetHvVoltage.value}V (${if (proMode) "PRO" else "NORMAL"})", Toast.LENGTH_SHORT).show()
     }
 
     fun checkOtaPreflightSafety(): String? {
@@ -1487,6 +1495,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
                 }
             }
+            bleClient.send("GET,CAPS")
             bleClient.send("GET,STATUS")
             bleClient.send("GET,META")
             bleClient.send("GET,SETUP")
@@ -1505,14 +1514,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val current = _telemetry.value
 
         var targetStage = current.setupStage
-        // Firmware R8 FIRST START otomatis tersimpan setelah 3s stabil & otomatis READY saat mesin berhenti
-        if (current.setupStage == SetupStage.FIRST_START.code) {
-            if (value.firstStartSeconds >= 3 && value.rpm == 0) {
-                targetStage = SetupStage.READY.code
-                _firmwareSetupStage.value = targetStage
+        // Aplikasi menunggu status READY nyata dari flash MCU (value.ready == true atau MCU setupStage >= 4),
+        // bukan berhenti atau menganggap selesai hanya karena bukti FIRST START (firstStartSeconds >= 3) tercatat di RAM.
+        if (value.ready || _firmwareSetupStage.value >= 4) {
+            targetStage = SetupStage.READY.code
+            _firmwareSetupStage.value = targetStage
+            _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, targetStage)
+            if (_quickSetupPage.value == SetupStage.FIRST_START.code) {
                 _quickSetupPage.value = targetStage
-                _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, targetStage)
-                appendLog("R8 Telemetry: FIRST START stabil >= 3s & mesin berhenti -> Otomatis READY!")
             }
         }
 
@@ -1602,6 +1611,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         appendLog("RX: $value")
         val f = value.split(',')
         when (f.firstOrNull()) {
+            "CAPS" -> {
+                val caps = f.drop(1).map { it.trim().uppercase() }.filter { it.isNotEmpty() }.toSet()
+                _mcuCapabilities.value = caps
+                appendLog("MCU Capabilities R8: ${caps.joinToString(", ")}")
+            }
             "STATUS" -> if (f.size >= 9) {
                 val slot = f[5].toIntOrNull()?.coerceIn(0, 3) ?: _selectedMapSlot.value
                 _selectedMapSlot.value = slot
