@@ -285,7 +285,7 @@ Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat untuk platform STM32 maupun ESP32, guna menghilangkan segala bentuk ambiguitas operasional.
 
 | J1 | Fungsi | Warna Kabel | Pin STM32 | Pin ESP32 | Deskripsi Kelistrikan |
-|:--:|:-------|:------------|:----------|:----------|:----------------------|
+|:--:|:-------|:--------------|:------------|:----------|:----------------------|
 | 1  | NC | Kosong / NC | - | - | Tidak terhubung. Isolasi rapi. |
 | 2  | TPS_A | Hijau-Putih | PA3 / PA5 | ADC Ch | Input sensor bukaan gas pasangan A. |
 | 3  | TEMP | Hitam-Putih | PA4 | ADC Ch | Input sensor suhu mesin NTC (Pull-up 4.7k ke 5V). |
@@ -293,8 +293,8 @@ Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat un
 | 5  | +12 V kontak | Cokelat | - | - | Input daya utama kunci kontak ON. Melewati penurun tegangan ke 5V. |
 | 6  | COIL_SIDE | Hitam-Merah | **PA2** | **GPIO26** | **OUTPUT (DIY):** Menembak koil samping via SCR driver. |
 | 7  | FAN_RELAY | Biru-Kuning | PB5 | GPIO27* | Output kendali relay kipas radiator otomatis. |
-| 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler. |
-| 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler. |
+| 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler dari **J1.6**. |
+| 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler dari **J1.12**. |
 | 10 | PULSER | Putih-Merah | **PA0** | **GPIO4** | Input sensor magnet. Tersambung permanen ke MCU via modul komparator LM393. |
 | 11 | GND | Hitam-Kuning | GND | GND | Ground utama massa motor. |
 | 12 | COIL_CENTER | Oranye | **PA1** | **GPIO25** | **OUTPUT (DIY):** Menembak koil tengah via SCR driver. |
