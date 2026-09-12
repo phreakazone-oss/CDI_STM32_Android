@@ -75,7 +75,7 @@ Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, s
 
 | Blok Fungsi CDI | Status Rekomendasi | Modul Pasaran Siap Pakai | Estimasi Harga | Alasan Teknis & Keuntungan Utama |
 |---|---|---|---|---|
-| **1. OEM Learn Signal Isolator** | ⭐ **SANGAT DIREKOMENDASIKAN #1** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 12.000 – Rp 18.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 5000V. Cukup 1 modul untuk dua kanal sekaligus: (OEM_CTR ← J1.9) dan (OEM_SIDE ← J1.8). |
+| **1. OEM Learn Signal Isolator** | ⭐ **SANGAT DIREKOMENDASIKAN #1** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 12.000 – Rp 18.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 5000V. Cukup 1 modul untuk dua kanal sekaligus: sadapan Center (J1.12) dan Side (J1.6). |
 | **2. Driver Relay Kipas** (J1.7 / Radiator Fan) | ⭐ **SANGAT DIREKOMENDASIKAN #2** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Rp 8.000 – Rp 14.000 | Menggantikan transistor BC547 diskrit. Pin MCU langsung masuk ke pin `IN` modul. Sudah ada optoisolator, dioda flyback proteksi lonjakan motor kipas, dan terminal sekrup. |
 | **3. Catu Daya Logic 5V** (+12V Kontak ke +5V MCU) | Alternatif Opsional | **Modul Mini DC-DC Buck MP1584EN / LM2596** | Rp 8.000 – Rp 15.000 | Menggantikan regulator linear panas. Menghasilkan 5.0V DC dingin & stabil untuk MCU. |
 
@@ -99,10 +99,10 @@ Setelah pengujian teknis mendalam terhadap karakteristik CDI kapasitif DTS-i, mo
 ### Detail Pemasangan Modul Optocoupler PC817 4-Channel (OEM Training / Learn)
 Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing koil pengapian CDI OEM secara pasif dan aman tanpa risiko merusak mikrokontroler.
 
-> **Catatan Harness J1.8 & J1.9**:
-> Pada soket harness motor NS200 asli dari pabrik, pin **J1.8** dan **J1.9** ditandai sebagai **NC (kosong)**. Untuk alur OEM Learn, pasang 2 kabel tambahan (*pigtail probe*):
-> - **J1.9** ➔ Sinyal pulsa koil Center OEM (masuk ke IN1+ modul PC817 via R 47kΩ 2W).
-> - **J1.8** ➔ Sinyal pulsa koil Side OEM (masuk ke IN2+ modul PC817 via R 47kΩ 2W).
+> **Catatan Sadapan Kabel OEM Learn**:
+> Sinyal asli dari koil memiliki tegangan ratusan volt yang akan merusak MCU jika tidak diisolasi. Buat 2 kabel cabang/paralel (*pigtail probe*) dari soket motor:
+> - **Kabel Sadap Utama** ➔ Diambil dari sambungan paralel **J1.12** (Koil Center OEM). Masuk ke IN1+ modul PC817 via R 47kΩ 2W.
+> - **Kabel Sadap Samping** ➔ Diambil dari sambungan paralel **J1.6** (Koil Side OEM). Masuk ke IN2+ modul PC817 via R 47kΩ 2W.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -110,13 +110,13 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 ├───────────────────────────────┬─────────────────────────────┤
 │  [TERMINAL INPUT KOIL OEM]    │    [TERMINAL OUTPUT MCU]    │
 │                               │                             │
-│  IN1+ ──[ R 47kΩ 2W ]── J1.9  │  OUT1 ──────▶ PIN INPUT CTR │
-│       (Kabel Tambahan OEM Ctr)│         (STM32 PB3/ESP GPIO16)
+│  IN1+ ──[ R 47kΩ 2W ]── J1.12 │  OUT1 ──────▶ PIN INPUT CTR │
+│     (Kabel Sadapan dari J1.12)│         (STM32 PB3 / ESP GPIO16)
 │  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PIN INPUT SIDE│
-│         (GND Motor Massa)     │         (STM32 PB4/ESP GPIO17)
+│         (GND Motor Massa)     │         (STM32 PB4 / ESP GPIO17)
 │                               │  OUT3 ──────  (Cadangan)    │
-│  IN2+ ──[ R 47kΩ 2W ]── J1.8  │  OUT4 ──────  (Cadangan)    │
-│       (Kabel Tambahan OEM Side│                             │
+│  IN2+ ──[ R 47kΩ 2W ]── J1.6  │  OUT4 ──────  (Cadangan)    │
+│     (Kabel Sadapan dari J1.6) │                             │
 │  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (MCU)     │
 │         (GND Motor Massa)     │  GND  ──────▶ GND (MCU)     │
 ├───────────────────────────────┴─────────────────────────────┤
@@ -126,7 +126,7 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 ```
 
 **Langkah & Tutorial Singkat**:
-1. Siapkan 2 buah Resistor **47 kΩ 2 Watt** (wajib daya besar 2 Watt). Pasang secara seri pada kabel sebelum masuk ke terminal `IN1+` dan `IN2+` untuk menahan spike tegangan 200V–400V dari pulsa koil pengapian.
+1. Siapkan 2 buah Resistor **47 kΩ 2 Watt** (wajib daya besar 2 Watt). Pasang secara seri pada kabel sebelum masuk ke terminal `IN1+` dan `IN2+` untuk menahan spike tegangan dari pulsa koil pengapian.
 2. Sambungkan terminal `IN1-` dan `IN2-` ke Ground massa motor (`J1.11 GND`).
 3. Beri daya modul sisi output dengan menyambungkan `VCC` ke Pin **3V3** MCU dan `GND` ke Pin **GND** MCU.
 4. Pasang jumper JP1 & JP2 modul pada posisi **VCC** (pull-up internal aktif ke 3.3V).
@@ -284,36 +284,36 @@ Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 
 Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat untuk platform STM32 maupun ESP32, guna menghilangkan segala bentuk ambiguitas operasional.
 
-| J1 | Fungsi | Warna Kabel | Pin STM32 | Pin ESP32 | Deskripsi Kelistrikan |
-|:--:|:-------|:--------------|:------------|:----------|:----------------------|
+| J1 | Fungsi | Warna Kabel | Pin STM32 | Pin ESP32 | Deskripsi Kelistrikan & Routing |
+|:--:|:-------|:------------|:----------|:----------|:--------------------------------|
 | 1  | NC | Kosong / NC | - | - | Tidak terhubung. Isolasi rapi. |
-| 2  | TPS_A | Hijau-Putih | PA3 / PA5 | ADC Ch | Input sensor bukaan gas pasangan A. |
-| 3  | TEMP | Hitam-Putih | PA4 | ADC Ch | Input sensor suhu mesin NTC (Pull-up 4.7k ke 5V). |
-| 4  | TPS_B | Abu-Abu | PA3 / PA5 | ADC Ch | Input sensor bukaan gas pasangan B. |
+| 2  | TPS_A | Hijau-Putih | PA3 / PA5 | **GPIO36** | Input sensor bukaan gas pasangan A. |
+| 3  | TEMP | Hitam-Putih | PA4 | **GPIO39** | Input sensor suhu mesin NTC (Pull-up 4.7k ke 5V). |
+| 4  | TPS_B | Abu-Abu | PA3 / PA5 | **GPIO34** | Input sensor bukaan gas pasangan B / Referensi. |
 | 5  | +12 V kontak | Cokelat | - | - | Input daya utama kunci kontak ON. Melewati penurun tegangan ke 5V. |
-| 6  | COIL_SIDE | Hitam-Merah | **PA2** | **GPIO26** | **OUTPUT (DIY):** Menembak koil samping via SCR driver. |
-| 7  | FAN_RELAY | Biru-Kuning | PB5 | GPIO27* | Output kendali relay kipas radiator otomatis. |
-| 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler dari **J1.6**. |
-| 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler dari **J1.12**. |
+| 6  | COIL_SIDE | Hitam-Merah | **PA2** | **GPIO26** | **OUTPUT (DIY):** Menembak koil samping via SCR driver menuju J1.6. |
+| 7  | FAN_RELAY | Biru-Kuning | PB5 | **GPIO13** | Output kendali relay kipas radiator otomatis. |
+| 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler dari kabel **J1.6**. |
+| 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler dari kabel **J1.12**. |
 | 10 | PULSER | Putih-Merah | **PA0** | **GPIO4** | Input sensor magnet. Tersambung permanen ke MCU via modul komparator LM393. |
 | 11 | GND | Hitam-Kuning | GND | GND | Ground utama massa motor. |
-| 12 | COIL_CENTER | Oranye | **PA1** | **GPIO25** | **OUTPUT (DIY):** Menembak koil tengah via SCR driver. |
-
-*\*Pin ESP32 untuk komponen sekunder (ADC & Fan) ditentukan lebih lanjut melalui file `cdi_board_esp32.h`.*
+| 12 | COIL_CENTER | Oranye | **PA1** | **GPIO25** | **OUTPUT (DIY):** Menembak koil tengah via SCR driver menuju J1.12. |
 
 ### ⚠️ PERHATIAN: Transisi Hardware (Fase LEARN ➔ Fase DIY)
 Untuk menghindari benturan arus driver koil dan memastikan keselamatan mikrokontroler, fungsionalitas pin J1.12 dan J1.6 diperlakukan berbeda secara fisik sesuai fasenya.
 
 **FASE 1: Penyadapan Pasif (Mode OEM_LEARN)**
 Pada fase ini, **CDI bawaan pabrik (OEM) WAJIB tetap menancap di soket motor** dan mengendalikan mesin. Mikrokontroler bertindak murni sebagai PENDENGAR (Input).
-1. **Jalur Input (Wajib Pasang):** Kabel Pulser (J1.10) terhubung permanen ke pin pembaca pulser (PA0/GPIO4). Kabel Sadap J1.12 (Center) dan J1.6 (Side) disambung menggunakan kabel cabang (paralel), masuk ke Modul Optocoupler PC817, lalu outputnya masuk ke pin pembaca koil (PB3/PB4 atau GPIO16/GPIO17).
+1. **Jalur Input (Wajib Pasang):** Kabel Pulser (J1.10) terhubung permanen ke pin pembaca pulser (PA0 / GPIO4).
+   - Kabel Sadap koil tengah diambil dengan cara menyambung paralel kabel dari **J1.12** ➔ Optocoupler PC817 ➔ Pin Pembaca (PB3 / GPIO16).
+   - Kabel Sadap koil samping diambil dengan menyambung paralel dari **J1.6** ➔ Optocoupler PC817 ➔ Pin Pembaca (PB4 / GPIO17).
 2. **Jalur Output (Wajib Terputus):** Pin penembak koil MCU (PA1/PA2 atau GPIO25/GPIO26) **TIDAK BOLEH** tersambung ke koil. Pin ini dibiarkan menggantung bebas.
 
 **FASE 2: Pengambilalihan Penuh (Mode DIY / FIRST_START)**
 Pada fase ini, **CDI bawaan pabrik (OEM) WAJIB dicabut secara fisik dari soket motor**. Mikrokontroler kini bertindak sebagai PENEMBAK (Output) yang mengontrol pengapian secara penuh.
 1. **Konfirmasi Cabut CDI Pabrik:** Buka aplikasi Android, ubah mode ke DIY, dan centang konfirmasi bahwa soket OEM telah dilepas (`OEM_UNPLUGGED`).
 2. **Jalur Input (Wajib Lepas):** Pin pembaca koil penyadap (PB3/PB4 atau GPIO16/GPIO17) dilepas/diabaikan dari rangkaian karena CDI OEM sudah dicabut.
-3. **Jalur Output (Wajib Pasang):** Pin penembak koil MCU (PA1/PA2 atau GPIO25/GPIO26) dihubungkan permanen ke sirkuit SCR menuju jalur **J1.12** dan **J1.6** untuk memicu busi secara mandiri.
+3. **Jalur Output (Wajib Pasang):** Pin penembak koil MCU (PA1/PA2 atau GPIO25/GPIO26) dihubungkan permanen ke sirkuit SCR menuju soket jalur **J1.12** dan **J1.6** untuk memicu busi secara mandiri.
 
 ---
 
