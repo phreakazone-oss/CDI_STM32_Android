@@ -105,24 +105,24 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 > - **Kabel Sadap Samping** ➔ Diambil dari sambungan paralel **J1.6** (Koil Side OEM). Masuk ke IN2+ modul PC817 via R 47kΩ 2W.
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│       MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD     │
-├───────────────────────────────┬─────────────────────────────┤
-│  [TERMINAL INPUT KOIL OEM]    │    [TERMINAL OUTPUT MCU]    │
-│                               │                             │
-│  IN1+ ──[ R 47kΩ 2W ]── J1.12 │  OUT1 ──────▶ PIN INPUT CTR │
-│     (Kabel Sadapan dari J1.12)│         (STM32 PB3 / ESP GPIO16)
-│  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PIN INPUT SIDE│
-│         (GND Motor Massa)     │         (STM32 PB4 / ESP GPIO17)
-│                               │  OUT3 ──────  (Cadangan)    │
-│  IN2+ ──[ R 47kΩ 2W ]── J1.6  │  OUT4 ──────  (Cadangan)    │
-│     (Kabel Sadapan dari J1.6) │                             │
-│  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (MCU)     │
-│         (GND Motor Massa)     │  GND  ──────▶ GND (MCU)     │
-├───────────────────────────────┴─────────────────────────────┤
-│ [LED1] [LED2] [LED3] [LED4]  • Indikator Kedip Pulsa        │
-│ [JP1]  [JP2]  [JP3]  [JP4]   • Jumper Output Level (Set VCC)│
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│       MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD       │
+├───────────────────────────────┬───────────────────────────────┤
+│   [TERMINAL INPUT KOIL OEM]   │     [TERMINAL OUTPUT MCU]     │
+│                               │                               │
+│ IN1+ ──[ R 47kΩ 2W ]── J1.12  │ OUT1 ──────> PIN INPUT CTR    │
+│      (Kabel Sadapan J1.12)    │      (STM32 PB3 / ESP GPIO16) │
+│ IN1- ───────────────── J1.11  │ OUT2 ──────> PIN INPUT SIDE   │
+│      (GND Motor Massa)        │      (STM32 PB4 / ESP GPIO17) │
+│                               │ OUT3 ──────  (Cadangan)       │
+│ IN2+ ──[ R 47kΩ 2W ]── J1.6   │ OUT4 ──────  (Cadangan)       │
+│      (Kabel Sadapan J1.6)     │                               │
+│ IN2- ───────────────── J1.11  │ VCC  ──────> 3V3 (MCU)        │
+│      (GND Motor Massa)        │ GND  ──────> GND (MCU)        │
+├───────────────────────────────┴───────────────────────────────┤
+│ [LED1] [LED2] [LED3] [LED4]  • Indikator Kedip Pulsa          │
+│ [JP1]  [JP2]  [JP3]  [JP4]   • Jumper Output Level (Set VCC)  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 **Langkah & Tutorial Singkat**:
