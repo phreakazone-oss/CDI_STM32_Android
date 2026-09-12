@@ -144,8 +144,8 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 - **Audio Synthesis Engine**: Android `SoundPool` (multi-stream crossfade) & `MediaPlayer` (custom tracks)
 - **Data Serialization**: `kotlinx.serialization` untuk protokol paket biner CDI
 - **Hardware Target (Dual-Platform)**:
-  - **WeAct STM32WB55CGU6** (Platform Orisinal).
-  - **ESP32 WROOM / ESP-IDF v6.1** (Platform Porting).
+  - [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) (Platform Orisinal).
+  - [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32) (Platform Porting).
 
 ---
 
