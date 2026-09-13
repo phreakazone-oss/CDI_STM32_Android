@@ -937,6 +937,12 @@ private fun StepSpecificRealisticLayout(
             RealisticResistor(ref = "R_BAT1", valueText = "100k", colorBands = listOf(Color(0xFF795548), Color.Black, Color(0xFFFDD835), Color(0xFFFFD54F)))
             RealisticResistor(ref = "R_BAT2", valueText = "22k", colorBands = listOf(Color.Red, Color.Red, Color(0xFFFF8F00), Color(0xFFFFD54F)))
           }
+          "step_2_2" -> {
+            RealisticIcChip(ref = "U_OEM1", partNumber = "PC817C", pinCount = 4, activePins = setOf(1, 2, 3, 4), pinLabels = mapOf(1 to "A", 2 to "K", 3 to "E", 4 to "C→PB3"))
+            RealisticIcChip(ref = "U_OEM2", partNumber = "PC817C", pinCount = 4, activePins = setOf(1, 2, 3, 4), pinLabels = mapOf(1 to "A", 2 to "K", 3 to "E", 4 to "C→PB4"))
+            RealisticResistor(ref = "6x R_OEM", valueText = "22k 1W", colorBands = listOf(Color.Red, Color.Red, Color(0xFFFDD835), Color(0xFFFFD54F)))
+            RealisticDiode(ref = "D_OEM1/2", partName = "1N4148 anti-parallel", isGlass = true)
+          }
           "step_2_6" -> {
             RealisticTo220(ref = "QFAN", partName = "BC547", pin1Label = "C", pin2Label = "B", pin3Label = "E")
           }
@@ -971,17 +977,7 @@ private fun StepSpecificRealisticLayout(
         when (step.id) {
           "step_3_1" -> {
             RealisticFuse(ref = "FHV", rating = "3A", color = Color(0xFF8E24AA))
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = SparkAmber.copy(alpha = 0.2f),
-              border = BorderStroke(1.5.dp, SparkAmber),
-              modifier = Modifier.padding(4.dp)
-            ) {
-              Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("JUMPER JP_HV", fontSize = 9.sp, color = SparkAmber, fontWeight = FontWeight.Bold)
-                Text("Saklar Servis Fisik", fontSize = 7.sp, color = TextSecondaryDark)
-              }
-            }
+            Text("FHV OUT → VIN_HV", fontSize = 9.sp, color = SparkAmber, fontWeight = FontWeight.Bold)
           }
           "step_3_3" -> {
             RealisticTransformer(ref = "T1", spec = "ATX EE-35 Push-Pull")
@@ -1056,7 +1052,9 @@ fun generateDefaultConnectionsForStep(step: WiringStep): List<PinConnection> {
       PinConnection("conn_1", "VIN_FILT", "Sekring FLOGIC (1A)", 0xFF00E5FF, "Jumper Kawat", "Proteksi catu daya modul LM2596"),
       PinConnection("conn_2", "FLOGIC Keluar", "Modul LM2596 IN+", 0xFF00E5FF, "Pin Header", "Solder ke lubang IN+ modul"),
       PinConnection("conn_3", "GND_STAR", "Modul LM2596 IN- & OUT-", 0xFF00E676, "Kabel AWG 22", "Satukan ground input dan output ke GND_STAR"),
-      PinConnection("conn_4", "Modul LM2596 OUT+ (5.00V)", "Rel +5V_LOGIC PCB", 0xFF00E5FF, "Kabel Merah AWG 22", "Pastikan terukur tepat 5.00V sebelum ke MCU")
+      PinConnection("conn_4", "Modul LM2596 OUT+ (5.15V)", "Anoda D_LOGIC_RUN SS34", 0xFF00E5FF, "Kabel Merah AWG 22", "Katoda bergaris menuju +5V_LOGIC"),
+      PinConnection("conn_5", "J_SERVICE_5V Pin 1 (+5V)", "Anoda D_LOGIC_SERVICE SS34", 0xFF29B6F6, "Kabel Merah AWG 22", "Katoda bergaris bertemu +5V_LOGIC"),
+      PinConnection("conn_6", "J_SERVICE_5V Pin 2", "GND_STAR", 0xFF00E676, "Kabel Hitam AWG 22", "Hanya sumber servis 5V regulated")
     )
     "step_1_4" -> listOf(
       PinConnection("conn_1", "Rel +5V_LOGIC", "WeAct H_BOTTOM.2 (5V)", 0xFF00E5FF, "Kabel AWG 22", "Solder ke socket female pin 2 baris bawah"),
@@ -1069,6 +1067,16 @@ fun generateDefaultConnectionsForStep(step: WiringStep): List<PinConnection> {
       PinConnection("conn_2", "R_BAT1 Bawah", "Simpul VBAT_ADC & R_BAT2 (22k)", 0xFF00E5FF, "Simpul Bersama", "Paralel dengan kapasitor 10nF ke GND_STAR"),
       PinConnection("conn_3", "Simpul VBAT_ADC", "Resistor 1k ke H_TOP.14 (PB0)", 0xFF00E5FF, "Kawat Jumper", "Input ADC1_IN15 deteksi tegangan aki"),
       PinConnection("conn_4", "Simpul VBAT_ADC", "BAT54S Clamp SOT-23", 0xFF00E5FF, "SMD Adapter", "Pin 1 ke GND, Pin 2 ke 3V3, Pin 3 ke ADC")
+    )
+    "step_2_2" -> listOf(
+      PinConnection("conn_1", "J1.12 cabang Y", "J_OEM_TAP.1 CENTER", 0xFFFF6D00, "Kabel Oranye", "J1.8/J1.9 tetap NC"),
+      PinConnection("conn_2", "J_OEM_TAP.1", "3x22k 1W seri → U_OEM1 Pin 1", 0xFFFF6D00, "Kawat terisolasi", "Total 66k; resistor berjajar"),
+      PinConnection("conn_3", "U_OEM1 Pin 2", "J_OEM_TAP.3 → J1.11", 0xFF00E676, "OEM_GND", "D_OEM1 antiparalel: katoda Pin 1, anoda Pin 2"),
+      PinConnection("conn_4", "U_OEM1 Pin 4", "WeAct H_TOP.9 PB3", 0xFF00E5FF, "Kabel sinyal", "Pull-up 4.7k dari Pin 4 ke 3V3; Pin 3 ke GND_LOGIC"),
+      PinConnection("conn_5", "J1.6 cabang Y", "J_OEM_TAP.2 SIDE", 0xFFFF1744, "Kabel Hitam-Merah", "Output DIY belum tersambung selama belajar OEM"),
+      PinConnection("conn_6", "J_OEM_TAP.2", "3x22k 1W seri → U_OEM2 Pin 1", 0xFFFF1744, "Kawat terisolasi", "Total 66k; resistor berjajar"),
+      PinConnection("conn_7", "U_OEM2 Pin 2", "J_OEM_TAP.3 → J1.11", 0xFF00E676, "OEM_GND", "D_OEM2 antiparalel: katoda Pin 1, anoda Pin 2"),
+      PinConnection("conn_8", "U_OEM2 Pin 4", "WeAct H_TOP.8 PB4", 0xFF29B6F6, "Kabel sinyal", "Pull-up 4.7k dari Pin 4 ke 3V3; Pin 3 ke GND_LOGIC")
     )
     "step_2_4" -> listOf(
       PinConnection("conn_1", "Harness J1.2 (Hijau-Putih)", "Header J_TPS Pin 1 & Pin 6", 0xFFFFD600, "Kabel Sensor", "Kabel TPS A NS200"),
@@ -1085,8 +1093,7 @@ fun generateDefaultConnectionsForStep(step: WiringStep): List<PinConnection> {
     )
     "step_3_1" -> listOf(
       PinConnection("conn_1", "VIN_FILT (PCB Logic)", "Sekring FHV (3A Blade)", 0xFFFF9E0B, "Kabel AWG 18 Antar Board", "Daya charger push-pull"),
-      PinConnection("conn_2", "Sekring FHV Keluar", "Header JP_HV Pin 1", 0xFFFF9E0B, "Header 2.54mm", "Saklar pemutus fisik tegangan tinggi"),
-      PinConnection("conn_3", "Header JP_HV Pin 2", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Menyuplai Center-Tap Trafo dan TC4427")
+      PinConnection("conn_2", "Sekring FHV Keluar", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Langsung menyuplai center-tap trafo dan TC4427; cabut fuse hanya saat servis")
     )
     "step_3_3" -> listOf(
       PinConnection("conn_1", "Rel VIN_HV", "Trafo T1 LV_CT (Center-Tap)", 0xFFFF9E0B, "Kawat Tembaga Tebal", "Input catu daya 12V push-pull"),

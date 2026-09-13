@@ -217,7 +217,7 @@ fun MotorsportTopBar(
                                 color = MotecOrange.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "R7.2",
+                                    text = "R8.2",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
