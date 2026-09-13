@@ -240,6 +240,8 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
     val fwMode by viewModel.firmwareMode.collectAsState()
     val isOemLearning by viewModel.isOemLearning.collectAsState()
     val oemCenterPulses by viewModel.oemCenterPulses.collectAsState()
+    val oemLearnCoverage by viewModel.oemLearnCoverage.collectAsState()
+    val oemRejectedPulses by viewModel.oemRejectedPulses.collectAsState()
     val oemSideSamples by viewModel.oemSideSamples.collectAsState()
     val isOemUnpluggedConfirmed by viewModel.isOemUnpluggedConfirmed.collectAsState()
     val isProVoltage by viewModel.isProVoltageConfigured.collectAsState()
@@ -335,6 +337,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
                             fontFamily = FontFamily.Monospace
                         )
                         CompactStatusRow("PULSA OEM CENTER (PB3)", "$oemCenterPulses pulsa", oemCenterPulses > 0)
+                        CompactStatusRow("CAKUPAN / DITOLAK", "$oemLearnCoverage% / $oemRejectedPulses", oemCenterPulses >= 20)
                         CompactStatusRow("SAMPEL OEM SIDE (PB4)", "$oemSideSamples sampel", oemSideSamples > 0)
                         CompactStatusRow("STATUS BELAJAR", if (isOemLearning) "SEDANG MEREKAM..." else "SIAP", isOemLearning)
 
@@ -353,7 +356,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry) {
                                 Text("MULAI LEARN", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             Button(
-                                enabled = isOemLearning && !pending,
+                                enabled = isOemLearning && !pending && oemCenterPulses >= 20 && t.rpm == 0 && t.hvCenter < 30 && t.hvSide < 30,
                                 onClick = viewModel::stopOemLearn,
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
@@ -489,7 +492,7 @@ private fun PulserStage(viewModel: CdiViewModel, t: Telemetry) {
     StageBody {
         StageCard(
             title = "2 • VERIFIKASI PULSER",
-            subtitle = "JP_HV tetap dilepas. Starter 2–3 detik; RPM harus terbaca dan kualitas pulser dianjurkan ≥10."
+            subtitle = "Pastikan output koil belum mengambil alih. Starter 2–3 detik; RPM harus terbaca dan kualitas pulser dianjurkan ≥10."
         ) {
             CompactStatusRow("RPM LIVE", "${t.rpm}", t.rpm > 0)
             CompactStatusRow("PULSER QUALITY", "${t.pickupQuality}/100", t.pickupQuality >= 10)
@@ -512,6 +515,8 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry) {
     val pending by viewModel.setupCommandPending.collectAsState()
     val isOemLearning by viewModel.isOemLearning.collectAsState()
     val oemCenterPulses by viewModel.oemCenterPulses.collectAsState()
+    val oemLearnCoverage by viewModel.oemLearnCoverage.collectAsState()
+    val oemRejectedPulses by viewModel.oemRejectedPulses.collectAsState()
     val oemSideSamples by viewModel.oemSideSamples.collectAsState()
     val isOemUnpluggedConfirmed by viewModel.isOemUnpluggedConfirmed.collectAsState()
 
@@ -521,6 +526,7 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry) {
             subtitle = "Jalur OEM Learn: Mesin dinyalakan menggunakan CDI bawaan motor. STM32 merekam pulsa pengapian secara pasif via PB3 & PB4. Strobo flywheel manual tidak diperlukan."
         ) {
             CompactStatusRow("PULSA OEM CENTER (PB3)", "$oemCenterPulses pulsa", oemCenterPulses > 0)
+            CompactStatusRow("CAKUPAN / DITOLAK", "$oemLearnCoverage% / $oemRejectedPulses", oemCenterPulses >= 20)
             CompactStatusRow("SAMPEL OEM SIDE (PB4)", "$oemSideSamples sampel", oemSideSamples > 0)
             CompactStatusRow("STATUS PEREKAMAN", if (isOemLearning) "SEDANG MEREKAM DARI CDI OEM..." else if (oemCenterPulses > 0) "TEREKAM (${oemCenterPulses} pulsa)" else "SIAP REKAM", isOemLearning || oemCenterPulses > 0)
 
@@ -538,7 +544,7 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry) {
                     Text("1. MULAI REKAM", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
-                    enabled = isOemLearning && !pending,
+                    enabled = isOemLearning && !pending && oemCenterPulses >= 20 && t.rpm == 0 && t.hvCenter < 30 && t.hvSide < 30,
                     onClick = viewModel::stopOemLearn,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
@@ -862,11 +868,11 @@ private fun OemLearnSafetyWiringGuide() {
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 listOf(
-                    0 to "1. MODUL PC817 4-CH (PLUG & PLAY)",
-                    1 to "2. KATALOG MODUL PASARAN",
-                    2 to "3. OPTO DISKRIT (SOLDER)",
-                    3 to "4. DIVIDER + CLAMP",
-                    4 to "5. DAYA STM32 (+12V)"
+                    0 to "1. PROBE OEM WAJIB",
+                    1 to "2. MODUL YANG BOLEH",
+                    2 to "3. PINOUT PC817",
+                    3 to "4. DILARANG: DIVIDER",
+                    4 to "5. CATU SERVICE 5V"
                 ).forEach { (tabIdx, tabTitle) ->
                     val active = selectedTab == tabIdx
                     Surface(
@@ -896,7 +902,7 @@ private fun OemLearnSafetyWiringGuide() {
             // Konten Skema Sesuai Tab
             when (selectedTab) {
                 0 -> {
-                    // TAB 1: MODUL PC817 4-CHANNEL PLUG & PLAY (SOLUSI PASARAN TERBAIK)
+                    // TAB 1: Probe OEM terisolasi dengan komponen dan rating yang jelas
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -905,20 +911,20 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "MODUL OPTOCOUPLER PC817 4-CHANNEL (SIAP PAKAI DI PASARAN)",
+                            text = "PROBE OEM TERISOLASI — PC817 DISKRIT 2 KANAL",
                             color = RacingLime,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Gunakan modul jadi di pasaran untuk menghilangkan kerumitan menyolder kaki IC optocoupler. Sudah dilengkapi sekrup terminal baut, LED indikator pulsa, dan jumper pull-up.",
+                            text = "Gunakan rangkaian dengan nilai dan pin yang diketahui. Modul PC817 generik 5/12/24V tidak otomatis aman terhadap pulsa koil dan tidak boleh dipasang hanya berdasarkan nama modul.",
                             color = TextSecondary,
                             fontSize = 8.5.sp,
                             fontFamily = FontFamily.Monospace
                         )
 
-                        // Diagram Visual Modul PC817 4-Channel
+                        // Netlist ringkas probe OEM CENTER dan SIDE
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -926,24 +932,12 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "┌─────────────────────────────────────────────────────────────┐\n" +
-                                        "│       MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD     │\n" +
-                                        "├───────────────────────────────┬─────────────────────────────┤\n" +
-                                        "│  [TERMINAL INPUT KOIL OEM]   │    [TERMINAL OUTPUT WEACT]  │\n" +
-                                        "│                               │                             │\n" +
-                                        "│  IN1+ ──[ R 47kΩ 2W ]── J1.9  │  OUT1 ──────▶ PB3 (H_TOP.9) │\n" +
-                                        "│       (Kabel Tambahan OEM Ctr)│               (Pulsa Center)│\n" +
-                                        "│  IN1- ──────────────── J1.11  │  OUT2 ──────▶ PB4 (H_TOP.8) │\n" +
-                                        "│         (GND Motor Massa)     │               (Pulsa Side)  │\n" +
-                                        "│                               │  OUT3 ──────  (Cadangan)    │\n" +
-                                        "│  IN2+ ──[ R 47kΩ 2W ]── J1.8  │  OUT4 ──────  (Cadangan)    │\n" +
-                                        "│       (Kabel Tambahan OEM Side│                             │\n" +
-                                        "│  IN2- ──────────────── J1.11  │  VCC  ──────▶ 3V3 (WeAct)   │\n" +
-                                        "│         (GND Motor Massa)     │  GND  ──────▶ GND (WeAct)   │\n" +
-                                        "├───────────────────────────────┴─────────────────────────────┤\n" +
-                                        "│ [LED1] [LED2] [LED3] [LED4]  • Indikator Kedip Pulsa        │\n" +
-                                        "│ [JP1]  [JP2]  [JP3]  [JP4]   • Jumper Output Level (Set VCC)│\n" +
-                                        "└─────────────────────────────────────────────────────────────┘",
+                                text = "CENTER: J1.12 cabang Y → J_OEM_TAP.1 → 22k/1W → 22k/1W → 22k/1W → U_OEM1 pin 1\n" +
+                                        "U_OEM1 pin 2 → J_OEM_TAP.3/J1.11; 1N4148 antiparalel: katoda pin 1, anoda pin 2\n" +
+                                        "U_OEM1 pin 4 → H_TOP.9 PB3 + pull-up 4.7k ke 3V3; pin 3 → GND_LOGIC\n\n" +
+                                        "SIDE: J1.6 cabang Y → J_OEM_TAP.2 → 3×22k/1W → U_OEM2 pin 1\n" +
+                                        "U_OEM2 pin 2 → J_OEM_TAP.3; pin 4 → H_TOP.8 PB4 + 4.7k ke 3V3; pin 3 → GND_LOGIC\n\n" +
+                                        "J1.8 dan J1.9 TETAP NC. Output DIY tidak tersambung selama CDI OEM menghidupkan koil.",
                                 color = ElectricCyan,
                                 fontSize = 7.5.sp,
                                 lineHeight = 10.5.sp,
@@ -952,13 +946,12 @@ private fun OemLearnSafetyWiringGuide() {
                         }
 
                         Text(
-                            text = "TUTORIAL SINGKAT & KEUNTUNGAN:\n" +
-                                    "1. Beli di Toko Online: Cari 'Modul Optocoupler PC817 4-Channel' (kisaran Rp 12.000 - Rp 18.000).\n" +
-                                    "2. Pangkas 85% Solderan: Kabel cukup dikupas dan dikencangkan dengan obeng pada terminal baut sekrup.\n" +
-                                    "3. Verifikasi Visual Langsung: LED1 & LED2 onboard akan berkedip saat koil memercik, membuktikan sinyal masuk tanpa osiloskop.\n" +
-                                    "4. PIN HARNESS J1.8 & J1.9: Di pabrik ditandai NC (kosong). Tambahkan 2 kabel probe pigtail ke pin J1.9 (OEM Center) dan pin J1.8 (OEM Side) untuk perekaman pasif.\n" +
-                                    "5. WAJIB RESISTOR SERI 47kΩ 2W: Karena input koil mencapai 200V-400V, wajib pasang resistor 47kΩ 2 Watt pada kabel sebelum masuk ke IN1+ dan IN2+ agar modul tidak jebol!\n" +
-                                    "6. Jumper JP1-JP2: Pasang jumper pada posisi VCC agar output pull-up aktif ke 3.3V STM32.",
+                            text = "URUTAN:\n" +
+                                    "1. Buat cabang Y non-destruktif dari J1.12, J1.6, dan J1.11 ke JST-XH 3-pin J_OEM_TAP.\n" +
+                                    "2. Pasang tiga resistor 22k 1W seri per kanal untuk membagi disipasi/tegangan kerja.\n" +
+                                    "3. Pasang 1N4148 tepat antiparalel pada LED input PC817.\n" +
+                                    "4. Sisi output: pin 3 GND_LOGIC; pin 4 ke PB3/PB4 dan pull-up 4.7k ke 3V3.\n" +
+                                    "5. Verifikasi dari aplikasi: accepted pulses dan coverage harus naik; bukan dari LED hias modul.",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,
@@ -976,14 +969,14 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "KATALOG MODUL PASARAN (DROP-IN MODULAR SEMUA BLOK CDI)",
+                            text = "MODUL PASARAN YANG BOLEH DIGUNAKAN",
                             color = MotecOrange,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Setiap blok fungsi sistem CDI R8 dapat digantikan oleh modul siap pakai di pasaran. Jalur kabel harness 12-pin (J1) motor tetap dipertahankan:",
+                            text = "Hanya modul dengan fungsi, pinout, dan rating yang dapat diverifikasi. Blok pengapian/HV tidak boleh diasumsikan drop-in:",
                             color = TextSecondary,
                             fontSize = 8.5.sp,
                             fontFamily = FontFamily.Monospace
@@ -996,22 +989,15 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "=== [1] MODUL BUCK STEP-DOWN DC-DC (LM2596 / MP1584EN) ===\n" +
-                                        "• Menggantikan: Regulator linear panas & elko besar.\n" +
-                                        "• Fungsi: Ubah +12V kontak (J1.5) -> stabil 5.0V DC dingin untuk Logic WeAct STM32.\n" +
-                                        "• Wiring: IN+ ke J1.5, IN- ke J1.11 (GND), OUT+ ke Pin 5V WeAct, OUT- ke GND.\n\n" +
-                                        "=== [2] MODUL OPTOCOUPLER PC817 4-CHANNEL (REKOMENDASI UTAMA #1) ===\n" +
-                                        "• Menggantikan: Desain diskrit solderan PC817 / voltage divider terpisah.\n" +
-                                        "• Fungsi: Isolasi optik aman tegangan tinggi OEM Learn Center (J1.9 ke PB3) dan Side (J1.8 ke PB4).\n" +
-                                        "• Fitur: Sekrup baut, LED indikator pulsa percikan koil, isolasi tegangan 5000V.\n\n" +
-                                        "=== [3] MODUL RELAY 1-CHANNEL 5V + OPTOCOUPLER (REKOMENDASI UTAMA #2) ===\n" +
-                                        "• Menggantikan: Rangkaian transistor diskrit BC547, resistor base, & dioda flyback.\n" +
-                                        "• Fungsi: Driver relay kipas radiator J1.7 via pin PB5 langsung.\n" +
-                                        "• Wiring: VCC ke 5V LM2596, GND ke GND_STAR, IN ke PB5, COM ke J1.7, NO ke GND.\n\n" +
-                                        "=== CATATAN MODUL YANG SUDAH DIUJI & DITOLAK (JANGAN DIGUNAKAN) ===\n" +
-                                        "• Modul Boost 12V->300-1200V: Arus hanya 2-20mA (kurang untuk 3 busi 10k RPM butuh 100mA+) dan tidak bisa PWM firmware.\n" +
-                                        "• Modul Bridge Rectifier Generik: Didesain untuk PLN 50/60Hz, panas drop pada switching 100kHz trafo ATX.\n" +
-                                        "• Modul Sensor Tegangan: Rasio pembagi resistor tidak presisi untuk ADC 3.3V firmware.",
+                                text = "=== BOLEH: BUCK LM2596 / MP1584EN ===\n" +
+                                        "• RUN: J1.5 melalui proteksi → buck 5.15V → SS34 → +5V_LOGIC.\n" +
+                                        "• SERVICE: USB/power-bank 5V regulated → SS34 kedua → +5V_LOGIC.\n\n" +
+                                        "=== BOLEH BERSYARAT: MODUL RELAY 1-CH 5V ===\n" +
+                                        "• Hanya bila input HIGH 3.3V terverifikasi dan terminal COM/NO digunakan sebagai dry contact.\n" +
+                                        "• Jangan menganggap semua modul optoisolasi memiliki pin/polaritas sama.\n\n" +
+                                        "=== TIDAK DROP-IN ===\n" +
+                                        "• Modul PC817 5/12/24V generik: resistor/LED/polaritas input berbeda; gunakan rangkaian PC817 diskrit pada tab 1/3.\n" +
+                                        "• Modul boost HV generik, bridge 50Hz, dan modul sensor tegangan generik tidak mengikuti kontrol/feedback R8.",
                                 color = RacingLime,
                                 fontSize = 7.5.sp,
                                 lineHeight = 10.5.sp,
@@ -1020,9 +1006,9 @@ private fun OemLearnSafetyWiringGuide() {
                         }
 
                         Text(
-                            text = "KESIMPULAN MODULARITAS v8.1 (NOL PCB CUSTOM):\n" +
-                                    "• Cukup gunakan 2 modul jadi: Modul PC817 4-CH & Modul Relay 1-CH 5V.\n" +
-                                    "• Jalur harness motor 12-pin (J1) tetap dipertahankan penuh, perakitan cepat bebas pusing!",
+                            text = "ATURAN R8.2:\n" +
+                                    "• Modul hanya menyederhanakan blok catu/relay; tidak menghapus kebutuhan proteksi dan netlist.\n" +
+                                    "• Cocokkan label terminal terhadap skematik vendor sebelum menyolder.",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,
@@ -1040,7 +1026,7 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "METODE 3: ISOLASI TOTAL DENGAN IC OPTOCOUPLER DISKRIT (SOLDER)",
+                            text = "PINOUT WAJIB PC817C / EL817C DIP-4",
                             color = RacingLime,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -1061,17 +1047,17 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "=== [1] JALUR SUNTIK KOIL CENTER (J1.12 ke PB3) ===\n" +
-                                        "Harness J1.12 (Oranye) ──[ R 47kΩ 2W ]──▶ Pin 1 (Anoda PC817)\n" +
-                                        "Harness J1.11 (GND)    ──[ Dioda 1N4148 ]─▶ Pin 2 (Katoda PC817)\n" +
-                                        "                                          (Antiparalel Spike)\n" +
+                                text = "=== [1] CENTER: J1.12 CABANG Y ke PB3 ===\n" +
+                                        "J_OEM_TAP.1 ──[22k 1W]─[22k 1W]─[22k 1W]──▶ Pin 1 (Anoda PC817)\n" +
+                                        "J_OEM_TAP.3 / J1.11 ───────────────────────▶ Pin 2 (Katoda PC817)\n" +
+                                        "1N4148 antiparalel: KATODA ke Pin 1, ANODA ke Pin 2\n" +
                                         "Pin 4 (Kolektor PC817) ─┬─▶ WeAct H_TOP.9 (Pin PB3)\n" +
                                         "                        │   (Monitor Pulsa Center OEM)\n" +
                                         "WeAct 3V3 (H_TOP.3) ───[4.7kΩ Pull-up]\n" +
                                         "Pin 3 (Emitter PC817)  ───▶ WeAct H_TOP.1 (Pin GND)\n\n" +
-                                        "=== [2] JALUR SUNTIK KOIL SIDE (J1.6 ke PB4) ===\n" +
-                                        "Harness J1.6 (Hitam-Merah) ──[ R 47kΩ 2W ]──▶ Pin 1 (Anoda PC817 #2)\n" +
-                                        "Harness J1.11 (GND)        ──[ Dioda 1N4148 ]─▶ Pin 2 (Katoda PC817 #2)\n" +
+                                        "=== [2] SIDE: J1.6 CABANG Y ke PB4 ===\n" +
+                                        "J_OEM_TAP.2 ──[22k 1W]─[22k 1W]─[22k 1W]──▶ Pin 1 (Anoda PC817 #2)\n" +
+                                        "J_OEM_TAP.3 / J1.11 ───────────────────────▶ Pin 2 (Katoda PC817 #2)\n" +
                                         "Pin 4 (Kolektor PC817 #2) ─┬─▶ WeAct H_TOP.8 (Pin PB4)\n" +
                                         "WeAct 3V3 (H_TOP.3) ──────[4.7kΩ Pull-up]\n" +
                                         "Pin 3 (Emitter PC817 #2)  ───▶ WeAct H_TOP.1 (Pin GND)",
@@ -1085,8 +1071,8 @@ private fun OemLearnSafetyWiringGuide() {
                         // Daftar Komponen
                         Text(
                             text = "DAFTAR KOMPONEN DIBUTUHKAN:\n" +
-                                    "• 2x IC Optocoupler PC817 / EL817 / 6N137\n" +
-                                    "• 2x Resistor 47 kΩ (WAJIB DAYA BESAR: 2 Watt Metal Film)\n" +
+                                    "• 2x IC Optocoupler PC817C / EL817C DIP-4\n" +
+                                    "• 6x Resistor 22 kΩ 1 Watt Metal Film (3 seri per kanal)\n" +
                                     "• 2x Dioda 1N4148 (Dipasang antiparalel antara Pin 1 & 2 Optocoupler)\n" +
                                     "• 2x Resistor 4.7 kΩ 0.25W (Pull-up ke 3V3 WeAct)",
                             color = TextPrimary,
@@ -1106,14 +1092,14 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "METODE 4: VOLTAGE DIVIDER + CLAMP DIODA (ALTERNATIF RESISTOR)",
+                            text = "DILARANG: DIVIDER LANGSUNG KE PB3/PB4",
                             color = SensorAmber,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Membagi tegangan dari ~300V menjadi ~3.0V dengan dioda clamp pengaman ke 3.3V.",
+                            text = "Skema divider langsung tidak memberikan isolasi galvanik dan dapat memasukkan spike/ground bounce pengapian ke STM32. Tab ini dipertahankan sebagai peringatan, bukan alternatif rakitan.",
                             color = TextSecondary,
                             fontSize = 8.5.sp,
                             fontFamily = FontFamily.Monospace
@@ -1127,18 +1113,11 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "=== JALUR CENTER (J1.12 ke PB3) ===\n" +
-                                        "J1.12 (Oranye) ──[ R1: 100kΩ 1W-2W ]──┬──[ R3: 1kΩ ]──▶ PB3 (H_TOP.9)\n" +
-                                        "                                       │\n" +
-                                        "                                 [ R2: 1.2kΩ ]\n" +
-                                        "                                       │\n" +
-                                        "                                 J1.11 (GND_STAR)\n" +
-                                        "                                       │\n" +
-                                        "                              [ Dioda BAT54S Clamp ]\n" +
-                                        "                              (Katoda ke 3V3, Anoda ke PB3)\n\n" +
-                                        "=== JALUR SIDE (J1.6 ke PB4) ===\n" +
-                                        "J1.6 (Hitam-M) ──[ R1: 100kΩ 1W-2W ]──┬──[ R3: 1kΩ ]──▶ PB4 (H_TOP.8)\n" +
-                                        "                                       └── R2 (1.2k) & Clamp ke GND/3V3",
+                                text = "JANGAN DIRAKIT:\n" +
+                                        "J1.12/J1.6 ─X─ resistor divider ─X─ PB3/PB4\n\n" +
+                                        "GUNAKAN:\n" +
+                                        "J_OEM_TAP → 3×22k 1W → LED PC817 + 1N4148 antiparalel\n" +
+                                        "Sisi transistor PC817 → pull-up 4.7k/3V3 → PB3 atau PB4.",
                                 color = MotecOrange,
                                 fontSize = 8.sp,
                                 lineHeight = 11.5.sp,
@@ -1147,11 +1126,11 @@ private fun OemLearnSafetyWiringGuide() {
                         }
 
                         Text(
-                            text = "DAFTAR KOMPONEN DIBUTUHKAN:\n" +
-                                    "• 2x Resistor 100 kΩ (1 Watt atau 2 Watt Metal Film)\n" +
-                                    "• 2x Resistor 1.2 kΩ (0.25 Watt)\n" +
-                                    "• 2x Resistor 1 kΩ (0.25 Watt seri pengaman gerbang MCU)\n" +
-                                    "• 2x Dioda Schottky BAT54S / BAT85 (Clamp cepat batas tegangan 3.3V)",
+                            text = "ALASAN DITOLAK:\n" +
+                                    "• Tidak ada isolasi galvanik.\n" +
+                                    "• Rating tegangan kerja resistor dan energi transient sulit dijamin.\n" +
+                                    "• Dioda clamp dapat mengalirkan energi spike ke rel 3V3.\n" +
+                                    "• Firmware R8 mengharapkan pulsa digital bersih dari isolator.",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,
@@ -1169,14 +1148,14 @@ private fun OemLearnSafetyWiringGuide() {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "SUMBER TEGANGAN PENYALAAN STM32 (+12V KONTAK KE +5V DC)",
+                            text = "CATU RUN + SERVICE 5V DENGAN DIODE-OR",
                             color = ElectricCyan,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "STM32 dan BLE harus menyala saat kunci kontak ON agar aplikasi dapat berkomunikasi dan merekam pulsa saat mesin motor hidup dengan CDI OEM.",
+                            text = "Port SERVICE menjaga STM32/BLE hidup setelah kill switch menghentikan mesin, sehingga LEARN,STOP dapat disimpan pada RPM 0 dan HV <30V tanpa backfeed ke motor.",
                             color = TextSecondary,
                             fontSize = 8.5.sp,
                             fontFamily = FontFamily.Monospace
@@ -1190,14 +1169,11 @@ private fun OemLearnSafetyWiringGuide() {
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = "Harness J1.5 (Cokelat / +12V Kontak) ──[ Sekring 2A ]──▶ [ VIN+ ]\n" +
-                                        "                                                        Modul Step-Down\n" +
-                                        "                                                        DC-DC Buck (5V)\n" +
-                                        "                                                       (LM2596 / MP1584)\n" +
-                                        "                                                        [ VOUT+ (5.0V) ] ──▶ WeAct Pin 5V (H_BOTTOM.1)\n" +
-                                        "                                                                             atau Port USB-C\n" +
-                                        "Harness J1.11 (Hitam-Kuning / GND)  ───────────────────▶ [ VIN- / GND ]\n" +
-                                        "                                                        [ VOUT- (GND) ] ───▶ WeAct Pin GND (H_TOP.1)",
+                                text = "RUN: J1.5 → FMAIN/proteksi → FLOGIC → LM2596 OUT+ 5.15V → anoda SS34 RUN\n" +
+                                        "SERVICE: J_SERVICE_5V pin 1 (+5V regulated) → anoda SS34 SERVICE\n" +
+                                        "Katoda/garis kedua SS34 bertemu → +5V_LOGIC → WeAct H_BOTTOM.2 (5V)\n" +
+                                        "J_SERVICE_5V pin 2 + LM2596 OUT- → GND_STAR → WeAct H_BOTTOM.1/H_TOP.1\n\n" +
+                                        "DILARANG: 12V aki atau adaptor laptop 19V ke J_SERVICE_5V.",
                                 color = RacingLime,
                                 fontSize = 8.sp,
                                 lineHeight = 11.5.sp,
@@ -1206,15 +1182,13 @@ private fun OemLearnSafetyWiringGuide() {
                         }
 
                         Text(
-                            text = "LANGKAH KONEKSI DAYA SAAT OEM LEARN:\n" +
-                                    "1. Sambungkan input regulator step-down ke kabel Kontak J1.5 (+12V) dan Massa J1.11 (GND).\n" +
-                                    "2. Pastikan tegangan output regulator disetel stabil di 5.0 Volt DC.\n" +
-                                    "3. Hubungkan output 5.0V ke Pin 5V WeAct STM32 (atau colokkan kabel USB-C).\n" +
-                                    "4. Pastikan Pin GND WeAct STM32 terhubung ke GND_STAR motor (J1.11).\n" +
-                                    "5. Saat kontak motor diputar ke ON:\n" +
-                                    "   • CDI bawaan motor mendapat daya normal.\n" +
-                                    "   • STM32 menyala, Bluetooth BLE menyala.\n" +
-                                    "   • Buka aplikasi di HP, hubungkan BLE, pilih OEM LEARN, lalu hidupkan mesin!",
+                            text = "LANGKAH OEM LEARN:\n" +
+                                    "1. Aktifkan SERVICE 5V dan pastikan BLE tetap terhubung.\n" +
+                                    "2. Saat RPM 0/HV <30V tekan MULAI LEARN, lalu hidupkan CDI OEM.\n" +
+                                    "3. Rekam hingga accepted ≥20 dan coverage memadai.\n" +
+                                    "4. Hentikan mesin/kill switch; jangan matikan SERVICE.\n" +
+                                    "5. Tunggu RPM 0 dan HV <30V, tekan SIMPAN & STOP, tunggu ACK.\n" +
+                                    "6. Baru matikan SERVICE dan pindahkan konektor dari OEM ke CDI DIY.",
                             color = TextPrimary,
                             fontSize = 8.5.sp,
                             lineHeight = 12.sp,
@@ -1226,4 +1200,3 @@ private fun OemLearnSafetyWiringGuide() {
         }
     }
 }
-

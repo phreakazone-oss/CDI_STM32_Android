@@ -42,12 +42,11 @@ sealed class OtaState {
 
 /**
  * BleCdiClient:
- * Dedicated GATT client for NS200 CDI R7.2 / R8 (STM32WB55).
+ * Dedicated GATT client for NS200 CDI R8 (STM32WB55), with legacy BLE identity compatibility.
  *
  * Requirements:
  * 1. Tanpa PIN / Bonding: Koneksi langsung via BLE GATT tanpa dialog PIN pairing Android.
- * 2. Unpair stale bond: Jika perangkat sebelumnya terlanjur berstatus BOND_BONDING / BOND_BONDED dengan PIN salah,
- *    unpair secara otomatis via removeBond() agar koneksi BLE GATT fresh dan tidak terhalang popup PIN lama.
+ *    Aplikasi tidak mengubah bond Android secara diam-diam.
  * 3. PHY 1M & High Priority: Mengatur connection priority HIGH dan preferred PHY 1M untuk transmisi stabil.
  * 4. Service & CCCD Berurutan: Discover service -> negosiasi MTU 247 -> serial write CCCD (0x2902) untuk Telemetry & Response.
  * 5. ACK Command Queue: Antrean perintah dengan sequence number, hanya 1 perintah aktif (in-flight) per waktu.
@@ -108,8 +107,13 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var otaDataBuffer: ByteArray? = null
     private var otaChunkIndex = 0
     private var otaTotalChunks = 0
+    private var otaBytesAcknowledged = 0
+    private var otaChunkPayloadSize = CdiProtocol.OTA_CHUNK_MAX_SIZE
     private var otaCancelled = false
+    private var otaAwaitingStatus = false
+    private var otaCommitSent = false
     private var otaJob: Runnable? = null
+    private var negotiatedMtu = 23
 
     var gattReady = false
         private set
@@ -259,6 +263,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         override fun onMtuChanged(owner: BluetoothGatt, mtu: Int, status: Int) {
             if (owner !== gatt) return
             cancelPhase()
+            negotiatedMtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else 23
             subscribe(owner)
         }
 
@@ -330,7 +335,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             _busy.value = false
             retryCount = 0
             send("PING")
-            listener.onState("Connected • R8/R7.2 BLE • PHY 1M", true)
+            listener.onState("Connected • STM32 R8 • PHY 1M", true)
             return
         }
 
@@ -373,9 +378,15 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 listener.onTelemetry(value)
             }
         } else if (uuid == otaStatusUuid) {
-            val statusStr = bytes.toString(Charsets.US_ASCII).trim()
-            listener.onResponse("OTA_STATUS,$statusStr")
-            handleOtaStatus(statusStr)
+            val status = CdiProtocol.otaStatus(bytes)
+            if (status == null) {
+                listener.onResponse("ERR,OTA_STATUS_CRC_OR_LENGTH_${bytes.size}")
+            } else {
+                listener.onResponse(
+                    "OTA,${status.state.code},${status.receivedBytes},${status.expectedBytes},${status.errorCode}"
+                )
+                handleOtaStatus(status)
+            }
         } else if (uuid == responseUuid) {
             responseBuffer.append(bytes.toString(Charsets.US_ASCII))
             while (true) {
@@ -408,10 +419,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                         if (abortTransaction) commands.clear()
                         updatePending()
                     }
+                    handleOtaControlResponse(parsed.body)
                     listener.onResponse(parsed.body)
-                    if (parsed.body.startsWith("OTA,")) {
-                        handleOtaStatus(parsed.body)
-                    }
                     if (!abortTransaction) writeNextCommand()
                 }
             }
@@ -483,26 +492,11 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         open(device)
     }
 
-    /**
-     * Unpair device if bonded or bonding from previous PIN failure so Android OS doesn't prompt for PIN.
-     */
-    @SuppressLint("MissingPermission")
-    private fun removeBondIfPresent(device: BluetoothDevice) {
-        try {
-            if (device.bondState != BluetoothDevice.BOND_NONE) {
-                device.javaClass.getMethod("removeBond").invoke(device)
-            }
-        } catch (_: Exception) {}
-    }
-
     @SuppressLint("MissingPermission")
     private fun open(device: BluetoothDevice) {
         cancelReconnect()
         closeCurrent()
         _busy.value = true
-
-        // Ensure stale bonds with wrong PIN are cleared so GATT connects cleanly without PIN/bonding
-        removeBondIfPresent(device)
 
         val displayName = try { device.name } catch (_: Exception) { null } ?: device.address
         listener.onState("Menghubungkan $displayName • tanpa PIN/bonding...", false)
@@ -566,6 +560,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         commandTimer = null
         otaJob?.let(main::removeCallbacks)
         otaJob = null
+        val transferActive = otaDataBuffer != null && !otaCancelled &&
+            _otaState.value !is OtaState.Success && _otaState.value !is OtaState.Error
         otaCancelled = true
         otaDataBuffer = null
         val owner = gatt
@@ -578,11 +574,16 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         descriptorActive = false
         subscriptionsStarted = false
         gattReady = false
+        negotiatedMtu = 23
         responseBuffer.clear()
         activeCommand = null
         commands.clear()
         updatePending()
-        _otaState.value = OtaState.Idle
+        if (transferActive) {
+            _otaState.value = OtaState.Error("Koneksi BLE terputus saat transfer OTA")
+        } else if (_otaState.value !is OtaState.Success && _otaState.value !is OtaState.Error) {
+            _otaState.value = OtaState.Idle
+        }
     }
 
     fun disconnect() {
@@ -603,32 +604,34 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Karakteristik Data: ...1004 (chunk sequential maks 208 byte)
      * Karakteristik Status: ...1005 (notifikasi / status flash)
      */
-    fun startOta(data: ByteArray): Boolean {
-        if (data.isEmpty()) {
-            _otaState.value = OtaState.Error("File APP.bin kosong!")
+    fun startOta(data: ByteArray, imageVersion: Long = CdiProtocol.OTA_IMAGE_VERSION): Boolean {
+        if (data.size !in CdiProtocol.OTA_MIN_IMAGE_SIZE..CdiProtocol.OTA_MAX_IMAGE_SIZE) {
+            _otaState.value = OtaState.Error(
+                "Ukuran APP.bin harus ${CdiProtocol.OTA_MIN_IMAGE_SIZE}..${CdiProtocol.OTA_MAX_IMAGE_SIZE} byte"
+            )
             return false
         }
-        if (!gattReady) {
-            _otaState.value = OtaState.Error("BLE belum terhubung!")
+        if (!gattReady || otaDataChar == null || otaStatusChar == null) {
+            _otaState.value = OtaState.Error("BLE/karakteristik OTA R8 belum siap")
             return false
         }
         otaCancelled = false
+        otaAwaitingStatus = false
+        otaCommitSent = false
         otaDataBuffer = data
         val crc32Val = CdiProtocol.crc32(data)
-        otaTotalChunks = (data.size + CdiProtocol.OTA_CHUNK_MAX_SIZE - 1) / CdiProtocol.OTA_CHUNK_MAX_SIZE
+        otaChunkPayloadSize = minOf(
+            CdiProtocol.OTA_CHUNK_MAX_SIZE,
+            (((negotiatedMtu - 10).coerceAtLeast(8)) / 8) * 8
+        )
+        otaTotalChunks = (data.size + otaChunkPayloadSize - 1) / otaChunkPayloadSize
         otaChunkIndex = 0
+        otaBytesAcknowledged = 0
 
         _otaState.value = OtaState.Preparing(
             "Inisialisasi OTA R8 (%d B, %d chunk, CRC32: %08X)...".format(data.size, otaTotalChunks, crc32Val)
         )
-        send("OTA,START,%d,%08X".format(data.size, crc32Val))
-
-        main.postDelayed({
-            if (!otaCancelled && gattReady) {
-                sendNextOtaChunk()
-            }
-        }, 500)
-        return true
+        return send("OTA,BEGIN,$imageVersion,${data.size},$crc32Val")
     }
 
     fun cancelOta() {
@@ -637,71 +640,138 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         otaJob = null
         otaDataBuffer = null
         _otaState.value = OtaState.Idle
-        send("OTA,CANCEL")
+        send("OTA,ABORT")
     }
 
     @SuppressLint("MissingPermission")
     private fun sendNextOtaChunk() {
-        if (otaCancelled || !gattReady) return
+        if (otaCancelled || !gattReady || otaAwaitingStatus) return
         val buf = otaDataBuffer ?: return
-        if (otaChunkIndex >= otaTotalChunks) {
+        if (otaBytesAcknowledged >= buf.size) {
+            if (otaCommitSent) return
             val crc = CdiProtocol.crc32(buf)
             _otaState.value = OtaState.Verifying(crc)
-            send("OTA,VERIFY,%08X".format(crc))
+            otaCommitSent = true
+            send("OTA,COMMIT")
             return
         }
 
-        val start = otaChunkIndex * CdiProtocol.OTA_CHUNK_MAX_SIZE
-        val end = minOf(start + CdiProtocol.OTA_CHUNK_MAX_SIZE, buf.size)
+        val start = otaBytesAcknowledged
+        val end = minOf(start + otaChunkPayloadSize, buf.size)
         val chunk = buf.copyOfRange(start, end)
+        val packet = try {
+            CdiProtocol.otaDataPacket(start, chunk)
+        } catch (e: IllegalArgumentException) {
+            _otaState.value = OtaState.Error(e.message ?: "Format chunk OTA tidak valid")
+            return
+        }
         val owner = gatt
         val char = otaDataChar
 
-        if (owner != null && char != null) {
+        val accepted = if (owner != null && char != null) {
             try {
                 if (Build.VERSION.SDK_INT >= 33) {
                     owner.writeCharacteristic(
                         char,
-                        chunk,
+                        packet,
                         BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-                    )
+                    ) == BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                     @Suppress("DEPRECATION")
-                    char.value = chunk
+                    char.value = packet
                     @Suppress("DEPRECATION")
                     owner.writeCharacteristic(char)
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) { false }
+        } else false
+
+        if (!accepted) {
+            _otaState.value = OtaState.Error("GATT menolak chunk OTA pada offset $start")
+            return
         }
-
-        otaChunkIndex++
-        val progress = otaChunkIndex.toFloat() / otaTotalChunks
-        _otaState.value = OtaState.Transferring(
-            bytesTransferred = end,
-            totalBytes = buf.size,
-            progressPercent = progress,
-            chunkIndex = otaChunkIndex,
-            totalChunks = otaTotalChunks
-        )
-
-        // Pacing ~20ms per 208-byte chunk untuk stabilitas BLE 1M PHY
+        otaAwaitingStatus = true
+        otaJob?.let(main::removeCallbacks)
         otaJob = Runnable {
-            sendNextOtaChunk()
-        }.also { main.postDelayed(it, 20L) }
+            if (!otaCancelled && otaAwaitingStatus && gattReady) send("GET,OTA")
+        }.also { main.postDelayed(it, 2_000L) }
     }
 
-    private fun handleOtaStatus(status: String) {
-        when {
-            status.contains("FLASH_OK", ignoreCase = true) ||
-            status.contains("SUCCESS", ignoreCase = true) ||
-            status.contains("CRC_OK", ignoreCase = true) ||
-            status.contains("DONE", ignoreCase = true) -> {
-                _otaState.value = OtaState.Success("Firmware R8 APP.bin berhasil diverifikasi & di-flash ke STM32!")
+    private fun handleOtaStatus(status: OtaStatusPacket) {
+        val buf = otaDataBuffer
+        if (status.state == FirmwareOtaState.ERROR) {
+            otaAwaitingStatus = false
+            _otaState.value = OtaState.Error("Firmware menolak OTA (kode ${status.errorCode})")
+            return
+        }
+        if (buf != null && status.expectedBytes != 0L && status.expectedBytes != buf.size.toLong()) {
+            _otaState.value = OtaState.Error("Panjang OTA MCU ${status.expectedBytes} tidak cocok dengan file ${buf.size}")
+            return
+        }
+        when (status.state) {
+            FirmwareOtaState.IDLE, FirmwareOtaState.ERASING -> Unit
+            FirmwareOtaState.RECEIVING -> {
+                if (buf == null) return
+                val acknowledged = status.receivedBytes.toInt().coerceIn(0, buf.size)
+                if (acknowledged < otaBytesAcknowledged || acknowledged > otaBytesAcknowledged + otaChunkPayloadSize) {
+                    _otaState.value = OtaState.Error("Offset OTA MCU tidak berurutan: $acknowledged")
+                    return
+                }
+                if (acknowledged == otaBytesAcknowledged && otaAwaitingStatus) return
+                otaJob?.let(main::removeCallbacks)
+                otaJob = null
+                otaAwaitingStatus = false
+                otaBytesAcknowledged = acknowledged
+                otaChunkIndex = (acknowledged + otaChunkPayloadSize - 1) / otaChunkPayloadSize
+                _otaState.value = OtaState.Transferring(
+                    bytesTransferred = acknowledged,
+                    totalBytes = buf.size,
+                    progressPercent = acknowledged.toFloat() / buf.size,
+                    chunkIndex = otaChunkIndex,
+                    totalChunks = otaTotalChunks
+                )
+                main.postDelayed(::sendNextOtaChunk, 15L)
             }
-            status.contains("ERR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true) -> {
-                _otaState.value = OtaState.Error("Gagal OTA: $status")
+            FirmwareOtaState.READY -> {
+                otaAwaitingStatus = false
+                otaDataBuffer = null
+                _otaState.value = OtaState.Success("APP.bin terverifikasi; STM32 akan boot ke firmware baru")
+            }
+            FirmwareOtaState.ERROR -> Unit
+        }
+    }
+
+    private fun handleOtaControlResponse(body: String) {
+        when {
+            body == "ACK,OTA_RECEIVE" -> {
+                otaAwaitingStatus = false
+                sendNextOtaChunk()
+            }
+            body == "ACK,OTA_READY_REBOOT" -> {
+                otaDataBuffer = null
+                _otaState.value = OtaState.Success("OTA R8 selesai; menunggu reboot STM32")
+            }
+            body == "ACK,OTA_ABORT" -> {
+                otaDataBuffer = null
+                _otaState.value = OtaState.Idle
+            }
+            body.startsWith("OTA,") -> {
+                val fields = body.split(',')
+                if (fields.size == 5) {
+                    val state = FirmwareOtaState.fromCode(fields[1].toIntOrNull() ?: return) ?: return
+                    handleOtaStatus(
+                        OtaStatusPacket(
+                            state,
+                            fields[2].toLongOrNull() ?: return,
+                            fields[3].toLongOrNull() ?: return,
+                            fields[4].toIntOrNull() ?: return
+                        )
+                    )
+                }
+            }
+            body.startsWith("ERR,") && otaDataBuffer != null -> {
+                _otaState.value = OtaState.Error("Firmware menolak OTA: $body")
             }
         }
     }

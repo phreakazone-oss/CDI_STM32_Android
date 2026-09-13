@@ -86,7 +86,7 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
                     color = MotecOrange
                 )
                 Text(
-                    text = "Panduan Resmi NS200 R7 • STM32WB55 Dual-Bank",
+                    text = "Panduan NS200 R8.2 • STM32WB55 Dual-Bank",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace
@@ -183,6 +183,8 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     val quickSetupUnlockedStage by viewModel.quickSetupUnlockedStage.collectAsState()
     val preflightBusy by viewModel.quickSetupPreflightBusy.collectAsState()
     val preflightMessage by viewModel.quickSetupMessage.collectAsState()
+    val oemSideSamples by viewModel.oemSideSamples.collectAsState()
+    val sideOffsetCdeg by viewModel.sideOffsetCdeg.collectAsState()
     val listState = rememberLazyListState()
     val visibleProgress = maxOf(t.setupStage, quickSetupUnlockedStage)
     var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo LED PB9, 1 = Manual Tanpa Strobo (Default)
@@ -201,7 +203,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, if (t.isHvOver300) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp)),
+                    .border(1.dp, if (t.isHvOverLimitWarning) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -235,7 +237,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     ) {
                         InterlockBadge("PB3 (OEM Center)", t.armed, RacingLime, TextMuted)
                         InterlockBadge("HV AKTIF", t.hvEnabled, RacingLime, TextMuted)
-                        InterlockBadge("PB4 (OEM Side)", t.proJumper, ElectricCyan, TextMuted)
+                        InterlockBadge("PRO 345 V", t.proEnabled, ElectricCyan, TextMuted)
                         InterlockBadge("CENTER KOIL", t.centerEnabled, RacingLime, TextMuted)
                         InterlockBadge("SIDE KOIL", t.sideEnabled, ElectricCyan, TextMuted)
                     }
@@ -695,14 +697,14 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         Text("READY: CENTER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
                     }
                     Button(
-                        enabled = !setupCommandPending,
-                        onClick = { viewModel.confirmReadyTripleSpark(0) },
+                        enabled = !setupCommandPending && oemSideSamples >= 10,
+                        onClick = { viewModel.confirmReadyTripleSpark(sideOffsetCdeg) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
-                        Text("READY: 3 BUSI", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
+                        Text(if (oemSideSamples >= 10) "READY: 3 BUSI" else "SIDE PERLU 10 SAMPEL", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
                     }
                 }
             }
@@ -881,8 +883,8 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
         HarnessPinItem("J1.5", "+12V kontak", "+12V Kontak", "VIN_PROT / FMAIN5A", "FMAIN5A--DREV--VIN_PROT--L47uH--VIN_FILT (ke FLOGIC dan FHV)", "AKTIF"),
         HarnessPinItem("J1.6", "Hitam-merah", "COIL_SIDE", "H_BOTTOM.11 (PA2 via QNS/QPS)", "Terminal B koil SIDE. SCR2 anode HV_SIDE, cathode GND", "OFFSET WAJIB", isWarning = true),
         HarnessPinItem("J1.7", "Biru-kuning", "FAN_RELAY", "H_TOP.7 (PB5 via Modul Relay / BC547)", "Modul Relay 1-CH 5V pin IN / Kolektor QFAN; coil relay ke +12V kontak", "MODUL PASARAN / DISKRIT", isWarning = true),
-        HarnessPinItem("J1.8", "NC (Pabrik) / OEM_SIDE", "OEM_SIDE", "H_TOP.8 (PB4 via PC817)", "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> PB4", "PROBE OEM SIDE R8"),
-        HarnessPinItem("J1.9", "NC (Pabrik) / OEM_CTR", "OEM_CTR", "H_TOP.9 (PB3 via PC817)", "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> PB3", "PROBE OEM CENTER R8"),
+        HarnessPinItem("J1.8", "NC", "NC", "Tidak disambung", "OEM SIDE memakai cabang Y J_OEM_TAP dari J1.6; bukan J1.8", "KOSONG"),
+        HarnessPinItem("J1.9", "NC", "NC", "Tidak disambung", "OEM CENTER memakai cabang Y J_OEM_TAP dari J1.12; bukan J1.9", "KOSONG"),
         HarnessPinItem("J1.10", "Putih-merah", "PULSER", "H_BOTTOM.9 (PA0 TIM2_CH1)", "39k--PICKUP_SENSE atau Modul Komparator LM393 DOUT ke PA0", "CONFIRM EDGE/OFFSET", isWarning = true),
         HarnessPinItem("J1.11", "Hitam-kuning", "GND", "H_BOTTOM.1 G / H_TOP.1 G", "GND_STAR ke logic & power, modul opto/relay GND, dan G board", "AKTIF"),
         HarnessPinItem("J1.12", "Koil Center", "COIL_CENTER", "H_BOTTOM.10 (PA1 via QNC/QPC)", "Terminal B koil CENTER. SCR1 anode HV_CENTER, cathode GND", "FIRST START & READY")
@@ -1192,7 +1194,7 @@ private fun PinRowCard(pin: WeActPinItem) {
 private fun BomShoppingView() {
     val boms = listOf(
         BomItem("LOGIC", "U1", "1", "WeAct STM32WB55CGU6", "Sudah dimiliki", "WAJIB satu-satunya MCU + BLE"),
-        BomItem("MODUL", "MOD_PC817", "1", "Modul Optocoupler PC817 4-Channel", "Beli baru (Rp12-18rb)", "OEM Learn (PB3 J1.9 & PB4 J1.8). Seri R 47k 2W"),
+        BomItem("OEM", "U_OEM1/2", "1 set", "2x PC817C + 6x22k 1W + 2x1N4148 + 2x4.7k + JST 3-pin", "Beli baru", "OEM Learn: cabang J1.12/J1.6 melalui J_OEM_TAP ke PB3/PB4"),
         BomItem("MODUL", "MOD_RELAY", "1", "Modul Relay 1-Channel 5V + Opto (High/Low)", "Beli baru (Rp6-12rb)", "Driver Kipas Radiator J1.7 (PB5). Pengganti BC547 diskrit"),
         BomItem("POWER", "PCB_POWER", "1", "PCB lubang minimal 5x7cm", "Beli baru", "Clearance HV >= 6mm, terpisah dari antena"),
         BomItem("POWER", "T1", "1", "Trafo utama ATX lilitan 5V CT utuh", "PSU PC bekas", "WAJIB; tidak dibuka/tidak dililit"),
@@ -1203,7 +1205,7 @@ private fun BomShoppingView() {
         BomItem("POWER", "SCR1-2", "2", "BT151-600R 600V TO-220", "Beli baru", "Thyristor pemicu koil CENTER & SIDE"),
         BomItem("HV", "C_CAP", "2", "1uF 630V Polypropylene Pulse MKP/MPP", "Beli baru", "WAJIB polypropylene pulse; bukan elko/X2!"),
         BomItem("HV", "DREC1-4", "4", "UF4007 1A 1000V ultrafast", "Beli baru", "Bridge penyearah trafo HV"),
-        BomItem("CONTROL", "SW_SVC", "1", "Switch toggle / jumper Service (opsional)", "Kit resistor", "Software Interlock R8 via firmware & BLE"),
+        BomItem("LOGIC", "J_SERVICE_5V", "1 set", "JST 2-pin + 2x SS34", "Beli baru", "Diode-OR catu RUN/SERVICE; hanya input servis 5V regulated"),
         BomItem("HARNESS", "J1", "1", "Pigtail pasangan soket CDI 12-pin NS200", "Donor / Beli", "WAJIB; jangan potong harness motor!")
     )
 
@@ -1221,14 +1223,14 @@ private fun BomShoppingView() {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "CATATAN MATERIAL & KOMPONEN KRITIS (MODUL PASARAN v8.1)",
+                        text = "CATATAN MATERIAL & KOMPONEN KRITIS R8.2",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = SensorAmber,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "• Modul Jadi Pasaran: Modul PC817 4-CH & Modul Relay 1-CH 5V mengeliminasi PCB custom & solderan transistor rumit!\n• Kapasitor CDI: Wajib polypropylene pulse 630V MKP/MPP; jangan gunakan elko atau X2!\n• PCB Power HV: Dipisah fisik minimal 6mm dari board logic dan modul.",
+                        text = "• OEM Learn: gunakan PC817 diskrit dengan jaringan 3×22k 1W per kanal; modul input generik tidak otomatis aman.\n• Kapasitor CDI: wajib polypropylene pulse 630V MKP/MPP; bukan elko/X2.\n• PCB Power HV: pisahkan fisik minimal 6mm dari board logic/antena.",
                         fontSize = 10.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
@@ -1312,14 +1314,14 @@ private fun ModularGuideView() {
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "MODUL JADI PASARAN (ZERO PCB CUSTOM)",
+                        text = "MODUL PASARAN & BLOK YANG WAJIB DISKRIT",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         color = RacingLime,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "Rekomendasi 2 modul komersial siap pakai untuk menggantikan komponen diskrit, memotong waktu perakitan, dan mencegah kesalahan penyolderan.",
+                        text = "Buck dan relay dapat memakai modul terverifikasi. Probe OEM wajib mengikuti nilai/pin PC817 diskrit agar input koil tidak disalahartikan sebagai input 5/12/24V biasa.",
                         fontSize = 10.sp,
                         color = TextPrimary,
                         fontFamily = FontFamily.Monospace
@@ -1328,7 +1330,7 @@ private fun ModularGuideView() {
             }
         }
 
-        // Modul 1: PC817 4-Channel
+        // Blok 1: PC817 diskrit dengan input berating jelas
         item {
             Card(
                 modifier = Modifier
@@ -1339,14 +1341,14 @@ private fun ModularGuideView() {
             ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "1. MODUL OPTOCOUPLER PC817 4-CHANNEL",
+                        text = "1. PROBE OEM PC817C — 2 KANAL DISKRIT",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = ElectricCyan,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "Fungsi: Isolasi HV OEM Training (Center & Side). 1 board modul menangani kedua kanal sekaligus.",
+                        text = "Fungsi: menangkap pulsa CENTER/SIDE CDI OEM secara pasif dan terisolasi sebelum masuk PB3/PB4.",
                         fontSize = 10.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
@@ -1359,16 +1361,13 @@ private fun ModularGuideView() {
                     ) {
                         Text(
                             text = "KONEKSI KABEL:\n" +
-                                    "• Sisi Input:\n" +
-                                    "  - IN1+ : Kabel tambahan J1.9 (OEM Center) via Resistor 47kΩ 2W\n" +
-                                    "  - IN1- : Ground Motor / Frame\n" +
-                                    "  - IN2+ : Kabel tambahan J1.8 (OEM Side) via Resistor 47kΩ 2W\n" +
-                                    "  - IN2- : Ground Motor / Frame\n" +
-                                    "• Sisi Output (Mikro):\n" +
-                                    "  - VCC  : 3.3V WeAct\n" +
-                                    "  - GND  : GND WeAct (GND_STAR)\n" +
-                                    "  - OUT1 : PB3 STM32WB55 (OEM Center Capture)\n" +
-                                    "  - OUT2 : PB4 STM32WB55 (OEM Side Capture)",
+                                    "• J_OEM_TAP.1 dari cabang J1.12 → 3×22k 1W seri → U_OEM1 pin 1\n" +
+                                    "• J_OEM_TAP.2 dari cabang J1.6 → 3×22k 1W seri → U_OEM2 pin 1\n" +
+                                    "• Pin 2 kedua PC817 → J_OEM_TAP.3/J1.11; 1N4148 antiparalel pin 1-2\n" +
+                                    "• Pin 3 kedua PC817 → GND_LOGIC\n" +
+                                    "• U_OEM1 pin 4 → PB3; U_OEM2 pin 4 → PB4\n" +
+                                    "• Masing-masing pin 4 ditarik 4.7k ke 3V3\n" +
+                                    "• J1.8 dan J1.9 tetap NC",
                             fontSize = 9.5.sp,
                             fontFamily = FontFamily.Monospace,
                             color = RacingLime,

@@ -14,8 +14,56 @@ enum class SetupStage(val code: Int, val label: String, val desc: String) {
 enum class FirmwareRunMode(val code: String, val label: String, val desc: String) {
     OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif melalui PB3/PB4"),
     MANUAL("MANUAL", "MANUAL", "Setup darurat strobo/TDC saat CDI OEM mati"),
-    DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik")
+    DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik");
+
+    companion object {
+        fun fromFirmwareCode(code: Int): FirmwareRunMode? = when (code) {
+            0 -> MANUAL
+            1 -> OEM_LEARN
+            2 -> DIY
+            else -> null
+        }
+    }
 }
+
+enum class OemLearnState(val code: Int) {
+    IDLE(0), ACTIVE(1), COMPLETE(2), ERROR(3);
+
+    companion object {
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code }
+    }
+}
+
+enum class FirmwareOtaState(val code: Int) {
+    IDLE(0), ERASING(1), RECEIVING(2), READY(3), ERROR(4);
+
+    companion object {
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code }
+    }
+}
+
+data class FirmwareModeStatus(
+    val mode: FirmwareRunMode,
+    val diyUnplugged: Boolean,
+    val proEnabled: Boolean,
+    val firstStartProven: Boolean
+)
+
+data class OemLearnStatus(
+    val state: OemLearnState,
+    val coveragePercent: Int,
+    val acceptedPulses: Int,
+    val rejectedPulses: Int,
+    val sideSamples: Int,
+    val sideOffsetCdeg: Int
+)
+
+data class OtaStatusPacket(
+    val state: FirmwareOtaState,
+    val receivedBytes: Long,
+    val expectedBytes: Long,
+    val errorCode: Int
+)
 
 data class Telemetry(
     val sequence: Int, val rpm: Int, val tps: Int, val advanceCdeg: Int,
@@ -25,8 +73,8 @@ data class Telemetry(
     val pickupQuality: Int, val firstStartSeconds: Int
 ) {
     val armed get() = flags and 0x01 != 0
-    val proJumper get() = flags and 0x02 != 0
-    val isProVoltage get() = flags and 0x02 != 0 // In R8, PRO voltage 345V vs NORMAL 285V is stored in config
+    val proEnabled get() = flags and 0x02 != 0
+    val isProVoltage get() = proEnabled
     val hvEnabled get() = flags and 0x04 != 0
     val calibrated get() = flags and 0x08 != 0
     val bleLink get() = flags and 0x10 != 0
@@ -54,6 +102,10 @@ object CdiProtocol {
     const val OTA_DATA = "7a8f1004-6c9d-4e40-a45f-0b4b4e533230"
     const val OTA_STATUS = "7a8f1005-6c9d-4e40-a45f-0b4b4e533230"
     const val OTA_CHUNK_MAX_SIZE = 208
+    const val OTA_STATUS_SIZE = 16
+    const val OTA_IMAGE_VERSION = 80200L
+    const val OTA_MIN_IMAGE_SIZE = 256
+    const val OTA_MAX_IMAGE_SIZE = 0x00030000
 
     const val TELEMETRY_SIZE = 20
     const val VERSION_3 = 3 // R7 / v3
@@ -127,11 +179,73 @@ object CdiProtocol {
             payload.substring(comma + 1))
     }
 
+    fun firmwareMode(body: String): FirmwareModeStatus? {
+        val fields = body.split(',')
+        if (fields.size != 5 || fields[0] != "MODE") return null
+        val mode = FirmwareRunMode.fromFirmwareCode(fields[1].toIntOrNull() ?: return null)
+            ?: return null
+        return FirmwareModeStatus(
+            mode = mode,
+            diyUnplugged = fields[2].toIntOrNull() == 1,
+            proEnabled = fields[3].toIntOrNull() == 1,
+            firstStartProven = fields[4].toIntOrNull() == 1
+        )
+    }
+
+    fun oemLearnStatus(body: String): OemLearnStatus? {
+        val fields = body.split(',')
+        if (fields.size != 7 || fields[0] != "LEARN") return null
+        val state = OemLearnState.fromCode(fields[1].toIntOrNull() ?: return null) ?: return null
+        return OemLearnStatus(
+            state = state,
+            coveragePercent = (fields[2].toIntOrNull() ?: return null).coerceIn(0, 100),
+            acceptedPulses = (fields[3].toIntOrNull() ?: return null).coerceAtLeast(0),
+            rejectedPulses = (fields[4].toIntOrNull() ?: return null).coerceAtLeast(0),
+            sideSamples = (fields[5].toIntOrNull() ?: return null).coerceAtLeast(0),
+            sideOffsetCdeg = (fields[6].toIntOrNull() ?: return null).coerceIn(-3000, 3000)
+        )
+    }
+
     private fun u16(a: ByteArray, offset: Int) =
         (a[offset].toInt() and 0xff) or ((a[offset + 1].toInt() and 0xff) shl 8)
+    private fun u32(a: ByteArray, offset: Int): Long =
+        (a[offset].toLong() and 0xffL) or
+            ((a[offset + 1].toLong() and 0xffL) shl 8) or
+            ((a[offset + 2].toLong() and 0xffL) shl 16) or
+            ((a[offset + 3].toLong() and 0xffL) shl 24)
     private fun s16(a: ByteArray, offset: Int) = u16(a, offset).toShort().toInt()
     private fun put16(a: ByteArray, offset: Int, value: Int) {
         a[offset] = (value and 0xff).toByte(); a[offset + 1] = ((value ushr 8) and 0xff).toByte()
+    }
+    private fun put32(a: ByteArray, offset: Int, value: Int) {
+        a[offset] = (value and 0xff).toByte()
+        a[offset + 1] = ((value ushr 8) and 0xff).toByte()
+        a[offset + 2] = ((value ushr 16) and 0xff).toByte()
+        a[offset + 3] = ((value ushr 24) and 0xff).toByte()
+    }
+
+    fun otaDataPacket(offset: Int, payload: ByteArray): ByteArray {
+        require(offset >= 0 && (offset and 7) == 0) { "Offset OTA wajib kelipatan 8" }
+        require(payload.size in 1..OTA_CHUNK_MAX_SIZE) { "Payload OTA harus 1..$OTA_CHUNK_MAX_SIZE byte" }
+        val out = ByteArray(5 + payload.size + 2)
+        put32(out, 0, offset)
+        out[4] = payload.size.toByte()
+        payload.copyInto(out, 5)
+        put16(out, out.size - 2, crc16(out, out.size - 2))
+        return out
+    }
+
+    fun otaStatus(packet: ByteArray): OtaStatusPacket? {
+        if (packet.size != OTA_STATUS_SIZE || u16(packet, 0) != 0xcd18 ||
+            (packet[2].toInt() and 0xff) != 1 || crc16(packet, 14) != u16(packet, 14)
+        ) return null
+        val state = FirmwareOtaState.fromCode(packet[3].toInt() and 0xff) ?: return null
+        return OtaStatusPacket(
+            state = state,
+            receivedBytes = u32(packet, 4),
+            expectedBytes = u32(packet, 8),
+            errorCode = u16(packet, 12)
+        )
     }
 
     fun telemetry(packet: ByteArray, previous: Telemetry = emptyTelemetry()): Telemetry? {

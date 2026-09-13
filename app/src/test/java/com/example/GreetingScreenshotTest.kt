@@ -24,7 +24,7 @@ class GreetingScreenshotTest {
   fun app_preview_screenshot() {
     composeTestRule.setContent {
       CdiR7Theme {
-        Text("NS200 CDI R7.2")
+        Text("NS200 CDI R8.2")
       }
     }
 

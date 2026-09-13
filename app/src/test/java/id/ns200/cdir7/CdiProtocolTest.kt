@@ -145,4 +145,62 @@ class CdiProtocolTest {
         assertEquals(SetupStage.FIRST_START.code, CdiProtocol.wizardStageFromFirmware(3, 640, 3200))
         assertEquals(SetupStage.READY.code, CdiProtocol.wizardStageFromFirmware(4, 640, 3200))
     }
+
+    @Test
+    fun parsesR8ModeAndOemLearnStatus() {
+        val mode = CdiProtocol.firmwareMode("MODE,2,1,1,0")
+        assertEquals(FirmwareRunMode.DIY, mode?.mode)
+        assertEquals(true, mode?.diyUnplugged)
+        assertEquals(true, mode?.proEnabled)
+        assertEquals(false, mode?.firstStartProven)
+
+        val learn = CdiProtocol.oemLearnStatus("LEARN,1,72,144,3,18,-125")
+        assertEquals(OemLearnState.ACTIVE, learn?.state)
+        assertEquals(72, learn?.coveragePercent)
+        assertEquals(144, learn?.acceptedPulses)
+        assertEquals(3, learn?.rejectedPulses)
+        assertEquals(18, learn?.sideSamples)
+        assertEquals(-125, learn?.sideOffsetCdeg)
+    }
+
+    @Test
+    fun buildsR8OtaPacketWithOffsetLengthAndCrc() {
+        val payload = ByteArray(16) { (it + 1).toByte() }
+        val packet = CdiProtocol.otaDataPacket(208, payload)
+        assertEquals(23, packet.size)
+        assertEquals(0xd0, packet[0].toInt() and 0xff)
+        assertEquals(16, packet[4].toInt() and 0xff)
+        assertArrayEquals(payload, packet.copyOfRange(5, 21))
+        val expectedCrc = CdiProtocol.crc16(packet, packet.size - 2)
+        val actualCrc = (packet[21].toInt() and 0xff) or ((packet[22].toInt() and 0xff) shl 8)
+        assertEquals(expectedCrc, actualCrc)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnalignedR8OtaOffset() {
+        CdiProtocol.otaDataPacket(3, byteArrayOf(1))
+    }
+
+    @Test
+    fun parsesAndRejectsCorruptR8OtaStatus() {
+        val packet = ByteArray(CdiProtocol.OTA_STATUS_SIZE)
+        packet[0] = 0x18
+        packet[1] = 0xcd.toByte()
+        packet[2] = 1
+        packet[3] = FirmwareOtaState.RECEIVING.code.toByte()
+        packet[4] = 0xd0.toByte() // received = 208
+        packet[8] = 0x00
+        packet[9] = 0x10 // expected = 4096
+        val crc = CdiProtocol.crc16(packet, 14)
+        packet[14] = crc.toByte()
+        packet[15] = (crc ushr 8).toByte()
+
+        val status = CdiProtocol.otaStatus(packet)
+        assertEquals(FirmwareOtaState.RECEIVING, status?.state)
+        assertEquals(208L, status?.receivedBytes)
+        assertEquals(4096L, status?.expectedBytes)
+
+        packet[4] = 0
+        assertNull(CdiProtocol.otaStatus(packet))
+    }
 }

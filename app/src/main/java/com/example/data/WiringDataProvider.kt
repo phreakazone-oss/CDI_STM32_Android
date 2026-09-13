@@ -84,25 +84,25 @@ object WiringDataProvider {
     ),
     HarnessPin(
       pinNumber = 8,
-      wireColor = "NC / Kabel Tambahan",
-      name = "OEM_SIDE (Probe Pasif Koil Samping)",
-      direction = "Input Monitor Pulsa Pasif",
-      completePath = "J1.8 tetap NC dari pabrik. Catatan: Pasang kabel tambahan dari Koil Side (J1.6) -> Resistor 47k 2W -> Modul Optocoupler PC817 (IN2+) -> OUT2 ke PB4",
-      destination = "H_TOP.8 (PB4 / OEM_SIDE)",
-      status = "OPTIONAL MODUL OEM_LEARN",
+      wireColor = "Kosong / NC",
+      name = "NC (Not Connected)",
+      direction = "Tidak Terhubung",
+      completePath = "J1.8 tidak digunakan. Probe OEM SIDE memakai cabang Y J_OEM_TAP dari kabel J1.6; jangan memakai pin kosong ini tanpa verifikasi harness aktual.",
+      destination = "KOSONG",
+      status = "KOSONG",
       isConnected = false,
-      detailGuide = "Pin J1.8 ditandai NC dari pabrik. Untuk alur OEM Learn, pasang kabel tambahan dari Koil Side (J1.6) melalui resistor 47k 2W ke Modul PC817 4-Channel (atau pin 8 pigtail sebagai jalur jumper probe) menuju WeAct PB4."
+      detailGuide = "Isolasi terminal pigtail dengan heat-shrink. Jalur belajar OEM harus berasal dari konektor J_OEM_TAP terpisah dan berlabel jelas."
     ),
     HarnessPin(
       pinNumber = 9,
-      wireColor = "NC / Kabel Tambahan",
-      name = "OEM_CTR (Probe Pasif Koil Center)",
-      direction = "Input Monitor Pulsa Pasif",
-      completePath = "J1.9 tetap NC dari pabrik. Catatan: Pasang kabel tambahan dari Koil Center (J1.12) -> Resistor 47k 2W -> Modul Optocoupler PC817 (IN1+) -> OUT1 ke PB3",
-      destination = "H_TOP.9 (PB3 / OEM_CTR)",
-      status = "OPTIONAL MODUL OEM_LEARN",
+      wireColor = "Kosong / NC",
+      name = "NC (Not Connected)",
+      direction = "Tidak Terhubung",
+      completePath = "J1.9 tidak digunakan. Probe OEM CENTER memakai cabang Y J_OEM_TAP dari kabel J1.12; jangan memakai pin kosong ini tanpa verifikasi harness aktual.",
+      destination = "KOSONG",
+      status = "KOSONG",
       isConnected = false,
-      detailGuide = "Pin J1.9 ditandai NC dari pabrik. Untuk alur OEM Learn, pasang kabel tambahan dari Koil Center (J1.12) melalui resistor 47k 2W ke Modul PC817 4-Channel (atau pin 9 pigtail sebagai jalur jumper probe) menuju WeAct PB3."
+      detailGuide = "Isolasi terminal pigtail dengan heat-shrink. Jalur belajar OEM harus berasal dari konektor J_OEM_TAP terpisah dan berlabel jelas."
     ),
     HarnessPin(
       pinNumber = 10,
@@ -148,12 +148,12 @@ object WiringDataProvider {
     WeActPin("H_TOP", 5, "PB7", "Bidir", "UART service RX opsional tanpa ESP", "USART1_RX", "CADANGAN"),
     WeActPin("H_TOP", 6, "PB6", "Output", "UART service TX opsional tanpa ESP", "USART1_TX", "CADANGAN"),
     WeActPin("H_TOP", 7, "PB5", "Output", "PB5 -> Pin IN Modul Relay 1-CH 5V / Resistor 4.7k BC547 -> J1.7", "Fan Relay Control", "AKTIF (Modul Relay / Transistor)"),
-    WeActPin("H_TOP", 8, "PB4", "Input", "J1.6 (Side) -> R 47k 2W -> Modul PC817 IN2+ -> OUT2 ke PB4", "OEM Side Pulse Monitor (R8 Learn)", "AKTIF OEM_LEARN", isCritical = true, warning = "Input pulsa koil samping pasif CDI OEM via isolator optocoupler."),
-    WeActPin("H_TOP", 9, "PB3", "Input", "J1.12 (Center) -> R 47k 2W -> Modul PC817 IN1+ -> OUT1 ke PB3", "OEM Center Pulse Monitor (R8 Learn)", "AKTIF OEM_LEARN", isCritical = true, warning = "Input pulsa koil utama pasif CDI OEM via isolator optocoupler."),
+    WeActPin("H_TOP", 8, "PB4", "Input", "J_OEM_TAP SIDE -> 3x22k 1W seri -> PC817 #2 pin 1; pin 2 ke OEM_GND, 1N4148 antiparalel; pin 4 -> PB4 + pull-up 4.7k ke 3V3, pin 3 -> GND", "OEM Side Pulse Monitor (R8 Learn)", "AKTIF OEM_LEARN", isCritical = true, warning = "Gunakan PC817 diskrit dan jaringan input ini; modul generik 5/12/24V tidak otomatis aman untuk pulsa koil."),
+    WeActPin("H_TOP", 9, "PB3", "Input", "J_OEM_TAP CENTER -> 3x22k 1W seri -> PC817 #1 pin 1; pin 2 ke OEM_GND, 1N4148 antiparalel; pin 4 -> PB3 + pull-up 4.7k ke 3V3, pin 3 -> GND", "OEM Center Pulse Monitor (R8 Learn)", "AKTIF OEM_LEARN", isCritical = true, warning = "Gunakan PC817 diskrit dan jaringan input ini; modul generik 5/12/24V tidak otomatis aman untuk pulsa koil."),
     WeActPin("H_TOP", 10, "PA15", "-", "Tidak dipakai", "Cadangan", "CADANGAN"),
     WeActPin("H_TOP", 11, "PA10", "Input", "PWM_CLAMP pull-up 4.7k ke 3V3; LOW = fault", "Hardware Fault Shutdown", "AKTIF", isCritical = true, warning = "Mematikan sinyal PWM charger secara instan jika arus trafo atau tegangan HV over."),
     WeActPin("H_TOP", 12, "PE4", "Output", "LED onboard aktif-low", "Indikator Status Board", "AKTIF"),
-    WeActPin("H_TOP", 13, "PB1", "-", "Tidak dipakai firmware R7/R8", "Cadangan", "CADANGAN"),
+    WeActPin("H_TOP", 13, "PB1", "-", "Tidak dipakai firmware R8", "Cadangan", "CADANGAN"),
     WeActPin("H_TOP", 14, "PB0", "Input", "VIN_FILT -> 100k -> VBAT_ADC -> 1k -> PB0; 22k || 10nF ke GND dan BAT54S clamp", "ADC1_IN15 Monitor Tegangan Aki", "AKTIF", isCritical = true),
     WeActPin("H_TOP", 15, "GND", "-", "Tidak dipakai", "Cadangan Ground", "CADANGAN"),
 
@@ -172,7 +172,7 @@ object WiringDataProvider {
     WeActPin("H_BOTTOM", 12, "PA3", "Input", "TPS_SIG -> 15k -> TPS_ADC -> 1k -> PA3; 27k || 4.7nF ke GND dan clamp", "ADC Sensor Bukaan Gas (TPS)", "AKTIF setelah selector", isCritical = true),
     WeActPin("H_BOTTOM", 13, "PA4", "Input", "J1.3 network -> 1k -> PA4", "ADC Sensor Suhu Mesin (TEMP)", "AKTIF"),
     WeActPin("H_BOTTOM", 14, "PA5", "Input", "TPS_REF -> 15k -> TPS_REF_MON -> 1k -> PA5; 27k || 4.7nF dan clamp", "ADC Monitor Referensi 5V TPS", "DIAGNOSTIK"),
-    WeActPin("H_BOTTOM", 15, "PA6", "Input", "HV_CENTER -> 4x270k seri -> HV_C_FB -> 1k -> PA6; 8.2k || 10nF dan clamp", "ADC Tegangan Bank CENTER", "AKTIF", isCritical = true, warning = "Tegangan tinggi hingga 290V/345V. Wajib 4 resistor 270k seri dan clamp BAT54S."),
+    WeActPin("H_BOTTOM", 15, "PA6", "Input", "HV_CENTER -> 4x270k seri -> HV_C_FB -> 1k -> PA6; 8.2k || 10nF dan clamp", "ADC Tegangan Bank CENTER", "AKTIF", isCritical = true, warning = "Tegangan tinggi hingga 345V nominal. Wajib 4 resistor 270k seri dan clamp BAT54S."),
     WeActPin("H_BOTTOM", 16, "PA7", "Input", "HV_SIDE -> 4x270k seri -> HV_S_FB -> 1k -> PA7; 8.2k || 10nF dan clamp", "ADC Tegangan Bank SIDE", "AKTIF", isCritical = true),
     WeActPin("H_BOTTOM", 17, "PA8", "-", "Tidak dipakai firmware universal", "Cadangan", "CADANGAN"),
     WeActPin("H_BOTTOM", 18, "PA9", "Output", "PA9 -> 1k -> TC4427 pin 2 (INA); pin 7 (OUTA) -> 10R -> Gate QHV1", "TIM1_CH2 PWM Charger A", "AKTIF", isCritical = true),
@@ -193,7 +193,7 @@ object WiringDataProvider {
       ),
       orientationGuide = "Pegang komponen menghadap sisi tulisan sablon menghadap Anda dengan pin mengarah ke bawah: Kaki 1 di kiri (Cathode), Kaki 2 di tengah (Anode), Kaki 3 di kanan (Gate). Plat pendingin logam (tab belakang) terhubung internal dengan Anode (tegangan tinggi 285V), jangan sampai menyentuh ground!",
       donorPsuRule = "Wajib beli baru kualitas bagus. Jangan gunakan triac AC.",
-      safetyNotice = "Tab logam di belakang BT151 bertegangan tinggi (220-290V) saat bekerja. Jangan tempelkan ke heatsink bersama tanpa mika isolator!"
+      safetyNotice = "Tab logam di belakang BT151 dapat bertegangan 220-345V saat bekerja. Jangan tempelkan ke heatsink bersama tanpa mika isolator!"
     ),
     ComponentPinout(
       ref = "IRF3205",
@@ -220,7 +220,7 @@ object WiringDataProvider {
         PinLeg("Pin 3", "GND", "Ground Daya (GND_POWER)"),
         PinLeg("Pin 4", "INB", "Input PWM B dari PB8 via resistor 1k dan pulldown 10k ke GND"),
         PinLeg("Pin 5", "OUTB", "Output penggerak Gate QHV2 via resistor 10R"),
-        PinLeg("Pin 6", "VDD", "Catu daya driver dari VIN_HV (setelah jumper JP_HV)"),
+        PinLeg("Pin 6", "VDD", "Catu daya driver dari VIN_HV setelah sekring FHV 3A"),
         PinLeg("Pin 7", "OUTA", "Output penggerak Gate QHV1 via resistor 10R"),
         PinLeg("Pin 8", "NC", "Tidak terhubung")
       ),
@@ -242,7 +242,7 @@ object WiringDataProvider {
         PinLeg("Pin 6", "IN2-", "Sense arus ISENSE_TOP (dari resistor RSENSE 0.05 ohm via 100R)"),
         PinLeg("Pin 7", "IN2+", "Referensi batas arus IREF (3V3 -> 120k -> 10k -> GND, tegangan ~0.25V)"),
         PinLeg("Pin 8", "IN3-", "Tegangan umpan balik HV Center (HV_C_FB)"),
-        PinLeg("Pin 9", "IN3+", "Referensi tegangan lebih VOV (+5V -> 120k -> 100k -> GND, ~2.27V clamp ~300V)"),
+        PinLeg("Pin 9", "IN3+", "Referensi VOV: +5V -> 75k -> VOV -> 100k -> GND, sekitar 2.86V; trip HV sekitar 379V"),
         PinLeg("Pin 10", "IN4-", "Tegangan umpan balik HV Side (HV_S_FB)"),
         PinLeg("Pin 11", "IN4+", "Referensi tegangan lebih VOV (gabung ke Pin 9)"),
         PinLeg("Pin 12", "GND", "Ground Logic Bintang (GND_STAR)"),
@@ -299,9 +299,9 @@ object WiringDataProvider {
       ref = "Trafo T1 (ATX PC)",
       name = "Trafo Inti Ferrite Push-Pull Step-Up",
       packageType = "Trafo Utama Bekas PSU Komputer (EE-35 / EI-33)",
-      ratingSpec = "Input 12V Push-Pull Center Tap -> Output Sekunder AC 200-300V",
+      ratingSpec = "Input 12V Push-Pull Center Tap -> Output Sekunder AC untuk bank 220-345V DC",
       pinLegs = listOf(
-        PinLeg("LV_CT", "Center-Tap Sekunder 5V Lama", "Tersambung ke VIN_HV (12V setelah jumper JP_HV)"),
+        PinLeg("LV_CT", "Center-Tap Sekunder 5V Lama", "Tersambung ke VIN_HV 12V setelah sekring FHV 3A"),
         PinLeg("LV_A", "Kaki Kiri 5V Lama", "Tersambung ke Drain MOSFET QHV1"),
         PinLeg("LV_B", "Kaki Kanan 5V Lama", "Tersambung ke Drain MOSFET QHV2"),
         PinLeg("HV_AC1", "Kaki Primer Tegangan Tinggi Lama 1", "Ke input jembatan dioda DREC1 (Anode) & DREC3 (Cathode)"),
@@ -309,7 +309,7 @@ object WiringDataProvider {
       ),
       orientationGuide = "Trafo ATX digunakan terbalik: Lilitan 5V center-tap yang dahulu menghasilkan 5V kini menjadi input primer 12V push-pull. Lilitan primer tegangan tinggi 300V lama kini menjadi keluaran sekunder AC tegangan tinggi. Lilitan 3.3V, 12V, dan auxiliary dipotong atau diisolasi.",
       donorPsuRule = "WAJIB trafo utama ATX utuh tanpa dibongkar atau dililit ulang! Dilarang menggunakan trafo raket nyamuk, flyback TV, atau charger hp.",
-      safetyNotice = "Keluaran AC menghasilkan tegangan tinggi mematikan di atas 220V-290V. Jaga jarak isolasi (clearance) minimal 6mm di PCB lubang."
+      safetyNotice = "Keluaran AC menghasilkan tegangan tinggi berbahaya untuk bank sampai 345V. Jaga clearance minimal 6mm di PCB lubang."
     ),
     ComponentPinout(
       ref = "C_CENTER / C_SIDE",
@@ -323,6 +323,21 @@ object WiringDataProvider {
       orientationGuide = "Kapasitor non-polar film. Dipasang kokoh di PCB Power.",
       donorPsuRule = "MUTLAK DILARANG memakai Elko (Elektrolit) atau kapasitor X2 275VAC biasa! Wajib kapasitor polypropylene pulse MKP/MPP rating 630V.",
       safetyNotice = "Menyimpan muatan energi tinggi. Selalu pasang 4x resistor bleeder 470k 0.5W secara seri melintang di kedua terminalnya untuk membuang muatan otomatis saat motor mati."
+    ),
+    ComponentPinout(
+      ref = "PC817C / EL817C",
+      name = "Optocoupler Probe Pasif OEM (U_OEM1 & U_OEM2)",
+      packageType = "DIP-4",
+      ratingSpec = "Isolasi 5 kVrms; dua IC terpisah untuk CENTER dan SIDE",
+      pinLegs = listOf(
+        PinLeg("Pin 1", "LED Anode", "Dari cabang koil J_OEM_TAP melalui tiga resistor 22k 1W yang diseri"),
+        PinLeg("Pin 2", "LED Cathode", "Ke OEM_GND/J1.11; 1N4148 dipasang antiparalel, katoda di Pin 1 dan anoda di Pin 2"),
+        PinLeg("Pin 3", "Emitter", "Ke GND_LOGIC WeAct"),
+        PinLeg("Pin 4", "Collector", "Ke PB3 (CENTER) atau PB4 (SIDE), ditarik naik 4.7k ke 3V3")
+      ),
+      orientationGuide = "Dilihat dari atas, notch/titik di atas: Pin 1 kiri atas, Pin 2 kiri bawah, Pin 3 kanan bawah, Pin 4 kanan atas.",
+      donorPsuRule = "Beli baru PC817C/EL817C agar CTR diketahui. Jangan gunakan modul optocoupler generik tanpa skematik dan rating input yang terverifikasi.",
+      safetyNotice = "Sisi input koil dan sisi logika terisolasi. Jangan menyatukan jalur input koil dengan 3V3; GND hanya kembali sesuai jalur yang ditentukan."
     ),
     ComponentPinout(
       ref = "J_TPS",
@@ -406,26 +421,29 @@ object WiringDataProvider {
       stageId = 1,
       stageTitle = "Tahap 1: Catu Daya Logic & Proteksi Dasar",
       stepNumber = "1.3",
-      title = "Penyolderan & Kalibrasi Modul Step-Down LM2596 (5.00V Logic)",
+      title = "Catu Logic Utama + Port Servis 5V dengan Diode-OR",
       board = PcbBoard.PCB_LOGIC,
       sourcePin = "VIN_FILT (via FLOGIC 1A)",
-      targetPin = "Rel Tegangan +5V_LOGIC",
+      targetPin = "Rel +5V_LOGIC yang tetap hidup saat mesin dihentikan untuk menyimpan OEM Learn",
       components = listOf(
         StepComponent("FLOGIC", "Sikring Daya Logic", "Fuse 1A + Socket", "Antara VIN_FILT dan IN+ modul LM2596"),
-        StepComponent("U_BUCK_LOGIC", "Modul LM2596 Step-Down", "Input 12V -> Output Disetel 5.00V 1A", "Modul DC-DC mini dengan trimpot multi-turn")
+        StepComponent("U_BUCK_LOGIC", "Modul LM2596 Step-Down", "Input 12V -> Output Disetel 5.15V", "Catu RUN dari motor"),
+        StepComponent("J_SERVICE_5V", "Port Servis Terkunci", "JST-XH 2-pin", "Pin 1 = +5V REGULATED dari USB/power-bank; Pin 2 = GND_STAR"),
+        StepComponent("D_LOGIC_RUN", "Dioda OR Jalur Motor", "SS34 3A Schottky", "Anoda dari OUT+ LM2596; katoda/garis ke +5V_LOGIC"),
+        StepComponent("D_LOGIC_SERVICE", "Dioda OR Jalur Servis", "SS34 3A Schottky", "Anoda dari J_SERVICE_5V.1; katoda/garis ke +5V_LOGIC")
       ),
-      schematicTrace = "VIN_FILT -> FLOGIC 1A -> Modul LM2596 (IN+) | GND_STAR -> Modul (IN-) | Modul (OUT+) disetel 5.00V -> +5V_LOGIC | Modul (OUT-) -> GND_STAR",
+      schematicTrace = "RUN: VIN_FILT -> FLOGIC 1A -> LM2596 IN+; OUT+ 5.15V -> anoda D_LOGIC_RUN SS34 -> katoda -> +5V_LOGIC. SERVICE: J_SERVICE_5V.1 (+5V regulated) -> anoda D_LOGIC_SERVICE SS34 -> katoda -> +5V_LOGIC. Semua ground -> GND_STAR; dua katoda bertemu hanya di +5V_LOGIC.",
       perfboardTips = listOf(
-        "Solder pin header 4-kaki untuk mendudukkan modul LM2596 di PCB lubang.",
-        "Hubungkan IN+ modul ke fuse FLOGIC 1A, dan IN- modul ke GND_STAR.",
-        "PENTING: JANGAN sambungkan OUT+ ke sirkuit WeAct dulu sebelum dikalibrasi!",
-        "Beri tegangan 12V pada input, ukur kaki OUT+ dengan voltmeter DC, putar trimpot obeng min hingga output tepat terbaca 5.00 Volt."
+        "Kalibrasi LM2596 ke 5.15V sebelum memasang D_LOGIC_RUN; setelah SS34, rel logika harus sekitar 4.8-5.0V.",
+        "Arah garis katoda kedua SS34 menghadap rel +5V_LOGIC. Ini mencegah catu servis memberi arus balik ke buck/jalur motor.",
+        "J_SERVICE_5V hanya menerima 5V regulated dari USB charger/power-bank. Dilarang memasukkan adaptor laptop 19V atau aki 12V.",
+        "Saat menyelesaikan OEM Learn: biarkan J_SERVICE_5V aktif, hentikan mesin/kill switch, tunggu RPM 0 dan HV <30V, lalu tekan SIMPAN & STOP di aplikasi."
       ),
-      pinLegGuide = "Terminal modul berlabel jelas: IN+ (Input 12V), IN- (Ground Input), OUT+ (+5V Output stabil), OUT- (Ground Output terhubung GND_STAR).",
-      verificationRequirement = "Ukur tegangan pada OUT+ modul LM2596 menggunakan multimeter digital skala 20V DC. Nilai harus berada dalam rentang 4.95V - 5.05V sebelum disambung ke WeAct!",
+      pinLegGuide = "LM2596: IN+/IN-/OUT+/OUT-. SS34: ujung tanpa garis = anoda; ujung bergaris = katoda. J_SERVICE_5V: pin 1 +5V, pin 2 GND.",
+      verificationRequirement = "Ukur +5V_LOGIC terhadap GND_STAR pada dua kondisi: hanya catu RUN, lalu hanya catu SERVICE. Keduanya harus menjaga WeAct hidup tanpa backfeed ke sumber yang tidak aktif.",
       verificationType = VerificationType.MULTIMETER_VOLT,
-      expectedValue = "Tepat 5.00V ± 0.05V",
-      criticalSafetyWarning = "Jika output melebihi 5.25V, WeAct STM32 dan IC LM339 akan rusak permanen. Verifikasi tegangan ini wajib mutlak!"
+      expectedValue = "+5V_LOGIC 4.75V - 5.05V pada RUN maupun SERVICE",
+      criticalSafetyWarning = "J_SERVICE_5V bukan input universal: hanya 5V regulated. Adaptor laptop 19V akan merusak WeAct dan seluruh logika."
     ),
     WiringStep(
       id = "step_1_4",
@@ -493,27 +511,29 @@ object WiringDataProvider {
       stepNumber = "2.2",
       title = "Pemasangan Jalur Sinyal OEM Learn PB3 (Center) & PB4 (Side)",
       board = PcbBoard.PCB_LOGIC,
-      sourcePin = "Harness J1.12 (Center) & J1.6 (Side) via R Seri 47k 2W",
+      sourcePin = "Cabang Y J_OEM_TAP dari J1.12 (Center), J1.6 (Side), dan J1.11 (OEM_GND)",
       targetPin = "WeAct H_TOP.9 (PB3) & H_TOP.8 (PB4)",
       components = listOf(
-        StepComponent("MOD_PC817", "Modul Optocoupler PC817 4-Channel", "Modul Siap Pakai Pasaran (Drop-In)", "IN1 ke J1.12 via 47k 2W, IN2 ke J1.6 via 47k 2W, OUT1 ke PB3, OUT2 ke PB4"),
-        StepComponent("R_DAMP_CTR", "Resistor Seri Peredam Lonjakan Center", "47k Ohm 2W Metal Film / Oxyd", "Diseri pada kabel dari J1.12 (Oranye) sebelum masuk terminal IN1+ modul"),
-        StepComponent("R_DAMP_SIDE", "Resistor Seri Peredam Lonjakan Side", "47k Ohm 2W Metal Film / Oxyd", "Diseri pada kabel dari J1.6 (Hitam-Merah) sebelum masuk terminal IN2+ modul")
+        StepComponent("J_OEM_TAP", "Konektor Probe OEM Terkunci", "JST-XH 3-pin", "Pin 1 CENTER dari cabang J1.12; Pin 2 SIDE dari cabang J1.6; Pin 3 OEM_GND dari J1.11"),
+        StepComponent("U_OEM1/U_OEM2", "Optocoupler OEM", "2x PC817C / EL817C DIP-4", "Pin 1 anode; 2 cathode; 3 emitter; 4 collector"),
+        StepComponent("R_OEM_C1..C3", "Pembatas CENTER", "3x 22k Ohm 1W Metal Film, seri", "J_OEM_TAP.1 menuju U_OEM1 pin 1"),
+        StepComponent("R_OEM_S1..S3", "Pembatas SIDE", "3x 22k Ohm 1W Metal Film, seri", "J_OEM_TAP.2 menuju U_OEM2 pin 1"),
+        StepComponent("D_OEM1/D_OEM2", "Proteksi Reverse LED", "2x 1N4148", "Antiparalel pada pin 1-2 tiap PC817: katoda pin 1, anoda pin 2"),
+        StepComponent("R_PULL1/R_PULL2", "Pull-up Output", "2x 4.7k Ohm 0.25W", "Dari pin 4 tiap PC817 ke 3V3")
       ),
-      schematicTrace = "J1.12 -> R 47k/2W -> IN1+ [Modul PC817] -> OUT1 -> H_TOP.9 (PB3 OEM_CTR) | J1.6 -> R 47k/2W -> IN2+ [Modul PC817] -> OUT2 -> H_TOP.8 (PB4 OEM_SIDE)",
+      schematicTrace = "CENTER: J1.12 cabang Y -> J_OEM_TAP.1 -> 22k/1W -> 22k/1W -> 22k/1W -> U_OEM1.1; U_OEM1.2 -> J_OEM_TAP.3/J1.11; D_OEM1 antiparalel 1-2; U_OEM1.4 -> PB3 + 4.7k ke 3V3; U_OEM1.3 -> GND_LOGIC. SIDE identik dari J1.6/J_OEM_TAP.2 -> U_OEM2 -> PB4.",
       perfboardTips = listOf(
-        "REKOMENDASI UTAMA MODULAR: Gunakan 'Modul Optocoupler PC817 4-Channel' dengan terminal baut sekrup (Rp 15.000 - Rp 25.000). Tidak perlu custom PCB atau solder IC kecil!",
-        "Catatan Firmware R8: Logika interlock hardware fisik lama (R_ARM, JP_PRO) telah sepenuhnya dihapus. Firmware R8 mengontrol ARM, Safe DIY, dan PRO Voltage secara cerdas via software di aplikasi.",
-        "Pin PB3 & PB4 kini didedikasikan sebagai probe monitor pasif untuk Mode OEM_LEARN membaca sinyal CDI bawaan motor.",
-        "Konektor J1.8 & J1.9 tetap ditandai NC dari pabrik, tetapi dapat diberi kabel tambahan sebagai jumper rapi probe pulsa OEM.",
-        "PERINGATAN KESELAMATAN: Wajib pasang resistor seri 47k 2W pada kabel koil sebelum masuk ke modul optocoupler untuk meredam tegangan spike 200V-400V!",
-        "Jumper level tegangan pada modul PC817 diatur ke posisi VCC (3.3V WeAct) agar pulsa output berayun bersih 0V - 3.3V ke PB3 dan PB4."
+        "J1.8 dan J1.9 tetap NC. Buat cabang Y non-destruktif dari J1.12/J1.6 menuju konektor J_OEM_TAP terpisah.",
+        "Letakkan tiga resistor 22k per kanal berjajar dengan jarak pad; total 66k membagi disipasi dan tegangan kerja antar resistor.",
+        "Pasang 1N4148 tepat di pin 1-2 PC817 untuk membatasi tegangan balik LED internal.",
+        "Jangan memakai LED indikator tambahan pada sisi input karena mengubah ambang dan bentuk pulsa.",
+        "Sebelum OEM Learn, output SCR DIY wajib tidak tersambung ke koil agar dua CDI tidak pernah menggerakkan jalur yang sama."
       ),
-      pinLegGuide = "Modul PC817: IN1+ (Koil Center J1.12 via 47k 2W), IN1- (GND J1.11), IN2+ (Koil Side J1.6 via 47k 2W), IN2- (GND J1.11). Sisi output: VCC (3V3 WeAct), GND (GND WeAct), OUT1 (PB3), OUT2 (PB4).",
-      verificationRequirement = "Nyalakan mesin dengan CDI OEM: LED1 dan LED2 pada modul optocoupler harus berkedip seirama percikan busi. Pada aplikasi, counter pulsa OEM Center (PB3) dan sampel OEM Side (PB4) bertambah naik.",
+      pinLegGuide = "PC817 DIP-4 dilihat dari atas/notch di atas: 1 anode, 2 cathode, 3 emitter, 4 collector. U_OEM1.4 ke H_TOP.9 PB3; U_OEM2.4 ke H_TOP.8 PB4.",
+      verificationRequirement = "Dalam OEM Learn, aplikasi harus menampilkan accepted pulses bertambah dan coverage naik; rejected pulses tidak boleh terus mendominasi.",
       verificationType = VerificationType.VISUAL_INSPECTION,
-      expectedValue = "LED1 & LED2 Kedip Aktif, Pulsa Terbaca di Aplikasi",
-      criticalSafetyWarning = "DILARANG menyambung kabel koil J1.12 dan J1.6 langsung ke pin STM32 tanpa optocoupler dan resistor seri 47k 2W! Tegangan induksi koil akan membakar MCU seketika."
+      expectedValue = "Accepted >=20, coverage meningkat, SIDE opsional >=10 sampel",
+      criticalSafetyWarning = "Dilarang menyambung J1.12/J1.6 langsung ke STM32. Modul PC817 generik bukan pengganti otomatis: gunakan hanya bila skematik, resistor input, polaritas, dan ratingnya benar-benar diverifikasi."
     ),
     WiringStep(
       id = "step_2_3",
@@ -659,7 +679,7 @@ object WiringDataProvider {
       verificationRequirement = "Beri sinyal uji logika 3.3V ke Gate via kabel jumper: LED strobo harus menyala terang seketika. Lepas sinyal: LED harus mati total.",
       verificationType = VerificationType.VISUAL_INSPECTION,
       expectedValue = "LED Menyala Responsif saat Gate HIGH",
-      criticalSafetyWarning = "Driver strobo hanya aktif pada tahap Quick Setup TDC saat jumper JP_HV lepas demi keselamatan kerja dekat magnet spul!"
+      criticalSafetyWarning = "Gunakan strobo hanya pada mode MANUAL/TDC. Pastikan output koil DIY belum aktif saat tangan berada dekat lubang timing."
     ),
     WiringStep(
       id = "step_2_8",
@@ -691,30 +711,29 @@ object WiringDataProvider {
     WiringStep(
       id = "step_3_1",
       stageId = 3,
-      stageTitle = "Tahap 3: Pemutus Fisik & Rangkaian Charger Push-Pull",
+      stageTitle = "Tahap 3: Catu Charger & Rangkaian Push-Pull",
       stepNumber = "3.1",
-      title = "Pemasangan Saklar Servis Daya & Sikring FHV 3A (PCB Power)",
+      title = "Pemasangan Sikring FHV 3A ke Rel Charger (Tanpa Jumper Operasi)",
       board = PcbBoard.PCB_POWER,
       sourcePin = "VIN_FILT dari PCB Logic",
       targetPin = "Rel Daya VIN_HV & Sikring FHV 3A",
       components = listOf(
         StepComponent("FHV", "Sikring Jalur Charger HV", "Fuse Blade 3A + Holder", "Antara kabel suplai dari VIN_FILT dan rel VIN_HV"),
-        StepComponent("JP_HV_OPSIONAL", "Saklar Pemutus Fisik Servis (Opsional)", "Header 2-Pin 2.54mm Tebal / Saklar Toggle", "Pemutus daya fisik saat pemeliharaan bengkel"),
         StepComponent("KABEL_ANTAR_BOARD", "Kabel Penghubung Daya 18 AWG", "Kabel serabut silikon fleksibel 18 AWG", "Menghubungkan VIN_FILT PCB Logic ke FHV PCB Power")
       ),
-      schematicTrace = "VIN_FILT (PCB Logic) ===> FHV 3A ===> [Saklar Servis / Link] ===> VIN_HV (Rel Suplai Trafo & TC4427)",
+      schematicTrace = "VIN_FILT (PCB Logic) -> FHV 3A -> VIN_HV (rel suplai center-tap trafo dan TC4427 pin 6). Tidak ada JP_HV/SW_ARM/JP_PRO pada jalur operasi R8.",
       perfboardTips = listOf(
         "Mulai pengerjaan pada PCB lubang kedua (PCB Power ukuran minimal 5x7 cm).",
         "Buat jarak aman (clearance) minimal 6mm antara area tegangan rendah 12V dan area tegangan tinggi 300V!",
-        "Catatan Firmware R8: Ketergantungan jumper fisik JP_HV lama telah dihapus dari firmware R8, digantikan dengan software interlock di aplikasi (Safe DIY Mode & First Start Protection).",
-        "Saklar/jumper pemutus fisik tetap sangat dianjurkan sebagai isolator daya mekanis demi keamanan teknisi saat perakitan atau penyolderan.",
+        "Firmware R8 mengatur charger, output permission, FIRST START, dan PRO lewat state tersimpan; tidak ada jumper yang harus dipindah saat setup.",
+        "Untuk servis bengkel, cabut FHV dari holder setelah kontak mati dan pastikan HV <30V; fuse adalah pemutus servis yang jelas dan tidak ambigu.",
         "Sikring FHV 3A melindungi aki dari bahaya arus berlebih jika terjadi hubung singkat pada push-pull MOSFET."
       ),
       pinLegGuide = "Kabel suplai masuk ke sikring FHV 3A, lalu keluar menuju rel daya charger VIN_HV.",
       verificationRequirement = "Pastikan koneksi daya dari VIN_FILT ke rel VIN_HV terhubung kokoh melalui sekring 3A. Saat kontak motor menyala, tegangan pada rel VIN_HV harus sama dengan tegangan aki.",
       verificationType = VerificationType.MULTIMETER_VOLT,
       expectedValue = "Rel VIN_HV = ~12V saat kontak aktif",
-      criticalSafetyWarning = "Selalu cabut sekring FHV atau matikan kontak motor saat menyolder atau menyetel sensor di area daya tinggi!"
+      criticalSafetyWarning = "Saat servis: kontak mati, cabut FHV, dan pastikan kedua bank HV <30V sebelum menyentuh PCB Power."
     ),
     WiringStep(
       id = "step_3_2",
@@ -842,14 +861,14 @@ object WiringDataProvider {
       components = listOf(
         StepComponent("DIV_IREF", "Pembagi Referensi Batas Arus", "120k (ke 3V3) + 10k (ke GND)", "Menghasilkan tegangan referensi IREF ~0.25V pada LM339 Pin 7"),
         StepComponent("R_ISENSE_IN", "Resistor Filter Sinyal Arus", "100R Ohm 0.25W", "Dari simpul ISENSE_TOP ke LM339 Pin 6 (IN2-)"),
-        StepComponent("DIV_VOV", "Pembagi Referensi Batas Tegangan HV", "120k (ke 5V) + 100k || 10nF (ke GND)", "Menghasilkan tegangan VOV ~2.27V pada LM339 Pin 9 & 11"),
+        StepComponent("DIV_VOV", "Pembagi Referensi Batas Tegangan HV", "75k (ke 5V) + 100k || 10nF (ke GND)", "Menghasilkan VOV ~2.86V pada LM339 Pin 9 & 11; trip sekitar 379V"),
         StepComponent("R_PU_CLAMP", "Resistor Pull-up Jalur Clamp", "4.7k Ohm ke 3V3", "Menarik jalur sinyal PWM_CLAMP ke status HIGH 3.3V"),
         StepComponent("DCL_A_B", "Dioda Fast Clamp Sinyal PWM", "2x 1N4148 Small Signal Diode", "Anoda ke jalur PWM_A & PWM_B, Katoda ke jalur PWM_CLAMP")
       ),
       schematicTrace = "LM339: Pin 1 (OUT2) + Pin 13 (OUT4) + Pin 14 (OUT3) digabung ke simpul PWM_CLAMP -> pullup 4.7k ke 3V3 -> H_TOP.11 (PA10) | PWM_A -> 1N4148 -> PWM_CLAMP | PWM_B -> 1N4148 -> PWM_CLAMP",
       perfboardTips = listOf(
         "Rangkaian ini adalah pengaman hardware murni independen tanpa campur tangan software.",
-        "Jika arus trafo melebihi 5A (0.05R x 5A = 0.25V) atau tegangan HV melebihi 300V, komparator LM339 langsung menarik jalur PWM_CLAMP ke Ground.",
+        "Jika arus trafo melebihi 5A (0.05R x 5A = 0.25V) atau HV mendekati 379V, komparator LM339 langsung menarik PWM_CLAMP ke Ground. Ambang ini tetap di atas target PRO 345V.",
         "Dioda 1N4148 langsung menguras sinyal PWM ke ground sehingga MOSFET padam dalam hitungan ratusan nanodetik.",
         "Pin H_TOP.11 (PA10) mendeteksi kondisi ini dan firmware memunculkan notifikasi FAULT."
       ),
@@ -939,7 +958,7 @@ object WiringDataProvider {
       verificationRequirement = "Ukur total resistansi dari HV_CENTER ke ground: harus terukur tepat ~1.088 MegaOhm (1.08M + 8.2k). Pastikan tidak ada jalur yang korslet ke ground.",
       verificationType = VerificationType.MULTIMETER_OHM,
       expectedValue = "~ 1.08 MegaOhm ± 2%",
-      criticalSafetyWarning = "Jika resistor seri ini putus atau tidak terpasang, MCU tidak dapat membaca tegangan bank dan charger akan terus memompa tegangan melebihi batas aman 300V!"
+      criticalSafetyWarning = "Jika resistor seri ini putus/tidak terpasang, feedback HV salah dan charger dapat memompa melampaui target 285/345V."
     ),
 
     // TAHAP 5: DISCHARGE & KOIL NS200
@@ -1065,7 +1084,7 @@ object WiringDataProvider {
         StepComponent("CHECK_CLEARANCE", "Jarak Celah Tegangan Tinggi", "PCB Power 5x7cm", "Clearance HV >= 6mm bebas serpihan timah"),
         StepComponent("CHECK_ANTENNA", "Area Bebas Logam Antena WeAct", "Ujung kanan board WeAct", "Tidak ada kabel HV, trafo, atau tembaga di radius 15mm")
       ),
-      schematicTrace = "Checklist Keselamatan Akhir: 1) Semua GND kembali ke GND_STAR. 2) Tidak ada kontinuitas 12V/HV ke pin ADC. 3) PA1/PA2 LOW saat reset. 4) JP_HV lepas memutus 100% VIN_HV.",
+      schematicTrace = "Checklist Keselamatan Akhir: 1) Semua GND kembali ke GND_STAR. 2) Tidak ada kontinuitas 12V/HV ke pin ADC. 3) PA1/PA2 LOW saat reset. 4) Kontak mati + FHV dicabut saat servis dan kedua bank HV <30V.",
       perfboardTips = listOf(
         "Bersihkan sisa serpihan timah dan sisa pasta flux di bawah PCB menggunakan sikat gigi dan alkohol isopropil (IPA).",
         "Pastikan sambungan solder mengkilap (tidak ada cold joint / retak).",
@@ -1083,75 +1102,75 @@ object WiringDataProvider {
   val quickSetupSteps: List<QuickSetupStep> = listOf(
     QuickSetupStep(
       stepNumber = 1,
-      stageName = "1. Flash Firmware",
+      stageName = "1. Flash Firmware R8 Lengkap",
       connectionCondition = "Kabel USB ke PC; tahan tombol BOOT0 di board WeAct, tekan-lepas tombol NRST, pilih port USB1 di STM32CubeProgrammer.",
-      appAction = "Flash file firmware NS200_CDI_R7.bin / .elf ke alamat 0x08000000.",
+      appAction = "Flash factory image R8 (.hex/.elf) sesuai README melalui USB DFU. APP.bin hanya untuk menu OTA setelah factory image sudah terpasang.",
       outputCondition = "Download + Verify sukses 100%; start core.",
       proceedCriteria = "Status terverifikasi di CubeProgrammer.",
       stopHazard = "Gagal koneksi: periksa kabel USB Type-C data (bukan kabel charger saja)."
     ),
     QuickSetupStep(
       stepNumber = 2,
-      stageName = "2. Logic & Tegangan Catu",
-      connectionCondition = "Saklar kill switch OFF (J1.5 = 0V); Kunci kontak motor ON; JUMPER JP_HV WAJIB LEPAS!",
-      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI-R7', hubungkan gatt.",
+      stageName = "2. Catu Logic & Preflight",
+      connectionCondition = "Koil belum dihubungkan ke output DIY. Beri catu melalui J_SERVICE_5V atau J1.5; pastikan FHV dicabut saat inspeksi awal.",
+      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI-R7', hubungkan GATT, lalu tekan Setup > PERIKSA & LANJUT.",
       outputCondition = "Tegangan aki terbaca akal (11.8V - 12.8V); HV terbaca < 30V; Tahap aplikasi terbaca 'BARU'.",
       proceedCriteria = "Aki terbaca normal & BLE terhubung stabil.",
       stopHazard = "STOP jika tegangan terbaca 0V atau HV > 50V saat jumper lepas."
     ),
     QuickSetupStep(
       stepNumber = 3,
-      stageName = "3. Uji Pulser Pickup",
-      connectionCondition = "J1.10 terhubung ke pulser spul motor melalui LM339; JP_HV tetap lepas; putar starter mesin 2-3 detik.",
-      appAction = "Perhatikan indikator Pulser di aplikasi: deteksi Edge (FALLING/RISING), PPR default 1.",
-      outputCondition = "Charger dan Koil tetap OFF; Quality sinyal pulser terbaca >= 10.",
-      proceedCriteria = "Pickup Quality >= 10 terdeteksi tanpa noise.",
-      stopHazard = "STOP jika pulsa hilang/ganda liar: balikkan jumper selector TPS atau periksa histeresis 10M."
+      stageName = "3. Pasang Probe OEM Pasif",
+      connectionCondition = "CDI OEM tetap menghidupkan koil. Output SCR DIY belum tersambung. Sambungkan J_OEM_TAP: pin1 cabang J1.12, pin2 cabang J1.6, pin3 J1.11.",
+      appAction = "Periksa dua kanal PC817: CENTER masuk PB3 dan SIDE masuk PB4 melalui jaringan 3x22k 1W + 1N4148 antiparalel.",
+      outputCondition = "Tidak ada sambungan langsung koil ke pin STM32; J1.8 dan J1.9 tetap NC.",
+      proceedCriteria = "Wiring probe sesuai pinout dan catu SERVICE 5V siap mempertahankan BLE.",
+      stopHazard = "Jangan lanjut jika output DIY dan CDI OEM sama-sama terhubung ke koil."
     ),
     QuickSetupStep(
       stepNumber = 4,
-      stageName = "4. Kalibrasi Sudut TDC Strobo",
-      connectionCondition = "Hubungkan LED strobo 5V ke PB9; arahkan cahaya ke lubang intip kaca magnet spul motor.",
-      appAction = "Putar starter mesin; perhatikan garis tanda huruf 'T' pada kruk as motor.",
-      outputCondition = "Garis 'T' terlihat diam sejajar tepat dengan garis penanda crankcase; tekan 'SAVE TDC'.",
-      proceedCriteria = "Garis T sejajar sempurna dan tersimpan di flash.",
-      stopHazard = "STOP jika tanda loncat-loncat: jangan lanjutkan ke start mesin."
+      stageName = "4. Rekam Timing dari CDI OEM",
+      connectionCondition = "Mesin awalnya mati, RPM 0, HV DIY <30V. Pilih OEM LEARN lalu tekan MULAI LEARN; setelah ACK, hidupkan mesin memakai CDI OEM.",
+      appAction = "Variasikan RPM dan bukaan gas secara bertahap. Pantau accepted pulses, coverage, rejected pulses, dan SIDE samples.",
+      outputCondition = "Accepted bertambah, coverage naik, rejected tidak mendominasi. SIDE >=10 membuka opsi tiga busi.",
+      proceedCriteria = "Minimal 20 pulsa CENTER valid; rekam lebih banyak hingga coverage memadai.",
+      stopHazard = "Jika accepted tetap nol, matikan mesin dan periksa polaritas/pin PC817—jangan menebak wiring."
     ),
     QuickSetupStep(
       stepNumber = 5,
-      stageName = "5. Kalibrasi Sensor TPS",
-      connectionCondition = "Mesin dalam kondisi mati; kontak ON; JP_HV tetap lepas.",
-      appAction = "Buka menu TPS di aplikasi: tekan 'Simpan Gas Tertutup' (0%), lalu pelintir gas penuh dan tekan 'Simpan Gas Penuh' (100%).",
-      outputCondition = "Rentang ADC terbaca proporsional dan diterima firmware.",
-      proceedCriteria = "Grafik bukaan gas bergerak mulus 0% - 100%.",
-      stopHazard = "Jika tegangan diam tidak berubah saat gas dipelintir: ubah jumper J_TPS dari Posisi A ke Posisi B."
+      stageName = "5. Hentikan Mesin & Simpan OEM",
+      connectionCondition = "J_SERVICE_5V tetap aktif. Hentikan mesin/kill switch hingga RPM 0; BLE/STM32 harus tetap hidup; tunggu HV CENTER dan SIDE <30V.",
+      appAction = "Tekan SIMPAN & STOP. Firmware menerima hanya jika minimal 20 pulsa valid, RPM 0, dan HV <30V.",
+      outputCondition = "ACK LEARN_SAVED_CENTER atau LEARN_SAVED_CENTER_SIDE; GET LEARN/META diperbarui otomatis.",
+      proceedCriteria = "Profil OEM tersimpan dan aplikasi tidak lagi menampilkan status ACTIVE.",
+      stopHazard = "Jangan mencabut catu SERVICE sebelum ACK karena profil masih berada di RAM."
     ),
     QuickSetupStep(
       stepNumber = 6,
-      stageName = "6. First Start Mesin (220V Center)",
-      connectionCondition = "Pilih mode FIRST START di aplikasi; PASANG JUMPER JP_HV; pastikan pemadam api/APD siap.",
-      appAction = "Pencet tombol starter motor. Tegangan HV diatur konservatif 220V, hanya busi CENTER yang memicu, advance maksimal 10 derajat, limiter 3.000 RPM.",
-      outputCondition = "Mesin hidup stabil idle minimal 3 detik tanpa gejala backfire atau detonasi.",
-      proceedCriteria = "Mesin hidup idle stasioner stabil >= 3 detik.",
-      stopHazard = "STOP SEGERA jika kickback/backfire, letupan knalpot, atau tegangan melonjak >= 300V!"
+      stageName = "6. Pindah ke CDI DIY",
+      connectionCondition = "Matikan semua daya dan pastikan HV <30V. Cabut CDI OEM. Hubungkan pigtail J1 ke CDI DIY; jangan memotong harness asli.",
+      appAction = "Nyalakan catu, pilih MODE DIY, konfirmasi OEM_UNPLUGGED. Firmware membaca kembali MODE/SETUP dari flash.",
+      outputCondition = "DIY=aktif; FIRST START membatasi 220V, CENTER saja, advance <=10°, limiter 3000 RPM.",
+      proceedCriteria = "Wiring CENTER J1.12 benar; SIDE J1.6 belum diaktifkan bila sampel SIDE belum cukup.",
+      stopHazard = "Jangan menghubungkan kembali CDI OEM ketika output DIY sudah tersambung."
     ),
     QuickSetupStep(
       stepNumber = 7,
-      stageName = "7. Konfirmasi READY & Simpan Map",
-      connectionCondition = "Matikan kontak motor; lepas JP_HV; pastikan tegangan kedua bank HV terkuras < 30V oleh bleeder.",
-      appAction = "Tekan 'SIMPAN READY CENTER' di aplikasi Android.",
-      outputCondition = "Boot berikutnya langsung mengaktifkan pengapian sesuai kurva timing map.",
-      proceedCriteria = "Status tersimpan permanen di Flash MCU dengan CRC valid.",
-      stopHazard = "Jangan sentuh PCB saat tegangan HV masih di atas 30V."
+      stageName = "7. FIRST START Otomatis",
+      connectionCondition = "Seluruh konektor terkunci, motor netral, area berventilasi. Tidak ada jumper operasi yang perlu dipindah.",
+      appAction = "Starter sekali dan biarkan idle 500-3200 RPM sedikitnya 3 detik. Firmware mencatat proof; setelah RPM kembali 0 dan HV <30V, READY disimpan otomatis. Jika daya terputus setelah proof, boot berikutnya mempromosikan READY.",
+      outputCondition = "Tidak ada kickback/backfire; FIRST START seconds mencapai 3 dan kemudian status READY.",
+      proceedCriteria = "READY terbaca dari firmware, bukan dari cache aplikasi.",
+      stopHazard = "STOP segera jika kickback/backfire/detonasi atau HV melampaui 360V."
     ),
     QuickSetupStep(
       stepNumber = 8,
-      stageName = "8. Tuning Lanjutan & Opsi 3-Busi",
-      connectionCondition = "Operasi NORMAL (285V); aktifkan busi samping (SIDE J1.6) HANYA setelah offset derajat SIDE diukur dengan lampu strobo pada motor aktual.",
-      appAction = "Pantau live telemetry di aplikasi: RPM, suhu mesin, tegangan aki, tegangan HV Bank Center & Side.",
+      stageName = "8. TPS, Map & Opsi 3-Busi",
+      connectionCondition = "READY telah tersimpan. NORMAL=slot 0-2/285V; PRO=slot 3/345V. SIDE hanya jika OEM Learn memiliki >=10 sampel SIDE dan offset tersimpan.",
+      appAction = "Kalibrasi TPS tertutup/terbuka, pilih slot, set limiter/kurva, lalu SYNC saat RPM 0 dan HV <30V. Aplikasi mengirim grid 8x4 NORMAL atau 16x8 PRO.",
       outputCondition = "Beda tegangan kedua bank < 50V; temperatur stabil di bawah 95°C; tidak ada reset.",
       proceedCriteria = "Seluruh parameter hijau stabil pada pengetesan jalan bertahap.",
-      stopHazard = "Tegangan 345V diblokir mutlak oleh sistem. Batas maksimal mode PRO dengan JP_PRO adalah 290V."
+      stopHazard = "HV >=360V adalah warning; jangan aktifkan tiga busi dengan offset SIDE hasil tebakan."
     )
   )
 
@@ -1162,7 +1181,7 @@ object WiringDataProvider {
     BomItem("b4", "POWER", "PCB_POWER", "1", "PCB lubang min 5x7cm (clearance >=6mm)", "Beli baru", "WAJIB terpisah dari antena board WeAct", false),
     BomItem("b5", "POWER", "T1", "1", "Trafo utama ATX lilitan 5V center-tap utuh", "PSU PC bekas", "WAJIB; tidak dibuka/tidak dililit ulang", false),
     BomItem("b6", "LOGIC", "U2", "1", "LM339N / KA339 DIP-14 5V", "PSU bekas / Beli baru", "WAJIB komparator pulser & fault", false),
-    BomItem("b7", "LOGIC", "U_BUCK_LOGIC", "1", "Modul LM2596 adjustable (set 5.00V 1A)", "Beli baru", "WAJIB catu daya 5V WeAct", false),
+    BomItem("b7", "LOGIC", "U_BUCK_LOGIC", "1", "Modul LM2596 adjustable (set 5.15V sebelum diode-OR)", "Beli baru", "WAJIB catu daya RUN WeAct", false),
     BomItem("b8", "POWER", "U4", "1", "TC4427A / TC4427CPA DIP-8 (4.5-18V)", "Beli baru", "WAJIB non-inverting driver gate", false),
     BomItem("b9", "POWER", "QHV1-QHV2", "2", "IRF3205 55V TO-220 Asli", "PSU bekas / Beli baru", "WAJIB switching push-pull 100kHz", false),
     BomItem("b10", "POWER", "SCR1-SCR2", "2", "BT151-600R 600V TO-220", "Beli baru", "WAJIB pemicu busi Center & Side", false),
@@ -1175,7 +1194,7 @@ object WiringDataProvider {
     BomItem("b17", "INPUT", "TVS_IN", "1", "SMBJ33A / P6KE33A unidirectional", "Beli baru", "WAJIB clamp lonjakan aki 12V", false),
     BomItem("b18", "POWER", "TVS_Q1-Q2", "2", "1.5KE33A / P6KE33A unidirectional", "Beli baru", "WAJIB clamp spike Drain MOSFET", false),
     BomItem("b19", "LOGIC", "DBAT", "8", "BAT54S SOT-23 dual Schottky", "Beli baru", "WAJIB clamp tegangan ke semua pin ADC", false),
-    BomItem("b20", "LOGIC", "DCL_A-DCL_B", "2", "1N4148 small signal diode", "PSU / Beli baru", "WAJIB clamp instan proteksi PWM", false),
+    BomItem("b20", "LOGIC", "DCL_A-DCL_B / D_OEM1-2", "4", "1N4148 small signal diode", "PSU / Beli baru", "2 clamp PWM + 2 antiparalel LED PC817", false),
     BomItem("b21", "HV", "C_CENTER-C_SIDE", "2", "1uF 630V Polypropylene pulse MKP/MPP", "Beli baru", "WAJIB; MUTLAK bukan elko atau X2!", false),
     BomItem("b22", "HV", "RHV_C-RHV_S", "8", "270k 1% 0.25W working >=200V", "Beli baru", "WAJIB 4 seri per jalur ADC feedback", false),
     BomItem("b23", "HV", "RBLEED_C-RBLEED_S", "8", "470k 0.5W working >=200V", "Beli baru", "WAJIB 4 seri per kapasitor pembuang muatan", false),
@@ -1184,13 +1203,13 @@ object WiringDataProvider {
     BomItem("b26", "INPUT", "C_IN", "1", "470uF 35V low-ESR", "PSU bekas / Beli baru", "WAJIB elko filter input", false),
     BomItem("b27", "POWER", "FMAIN-FLOGIC-FHV", "3", "Fuse Blade + holder 5A / 1A / 3A", "Holder PSU + fuse baru", "WAJIB sikring proteksi berlapis", false),
     BomItem("b28", "CONTROL", "J_TPS", "1", "Header male 2x3 + 2 shunt jumper 2.54mm", "Beli baru", "WAJIB selektor pinout kabel TPS", false),
-    BomItem("b29", "OEM_LEARN", "MOD_PC817 / R_DAMP", "1 set", "Modul Optocoupler PC817 4-CH + 2x R 47k 2W", "Beli baru modul pasaran", "WAJIB untuk alur OEM Learn aman PB3 (Center) & PB4 (Side)", false),
-    BomItem("b30", "CONTROL", "SW_SERVICE", "1", "Saklar pemutus servis daya / Header 2-Pin", "Beli baru", "OPSIONAL saklar isolator mekanis PCB Power (Interlock dikontrol software R8)", false),
+    BomItem("b29", "OEM_LEARN", "J_OEM_TAP/U_OEM/R_OEM", "1 set", "JST-XH 3-pin + 2x PC817C + 6x 22k 1W + 2x 4.7k + 2x 1N4148", "Beli baru", "WAJIB untuk OEM Learn PB3/PB4; bukan modul input generik", false),
+    BomItem("b30", "LOGIC", "J_SERVICE_5V/D_LOGIC", "1 set", "JST-XH 2-pin + 2x SS34 Schottky 3A", "Beli baru", "WAJIB agar logika tetap hidup saat mesin dihentikan dan data OEM disimpan", false),
     BomItem("b31", "SETUP", "Q_STROBE", "1", "FQP30N06L logic-level MOSFET TO-220", "Beli baru", "OPSIONAL sangat dianjurkan untuk timing TDC", false),
     BomItem("b32", "SETUP", "LED_STROBE", "1", "Modul LED putih 5V 1W dengan driver", "Beli baru", "OPSIONAL sangat dianjurkan untuk timing TDC", false),
     BomItem("b33", "HARNESS", "J1", "1", "Pigtail pasangan soket CDI 12-pin NS200", "Donor harness / Beli baru", "WAJIB pigtail adaptor; jangan potong kabel motor!", false),
     BomItem("b34", "HARNESS", "J_AUDIO_CTL", "1", "Header terkunci 2-pin JST-XH", "Beli baru", "OPSIONAL dipasang sekarang untuk ekspansi audio", false),
-    BomItem("b35", "PASSIVE", "R_SMALL", "1 set", "10R 100R 330R 1k 2.2k 4.7k 8.2k 10k 15k 22k 27k 39k 47k 100k 120k", "Beli kit resistor", "WAJIB ikuti netlist presisi 1%", false),
+    BomItem("b35", "PASSIVE", "R_SMALL", "1 set", "10R 100R 330R 1k 2.2k 4.7k 8.2k 10k 15k 22k 27k 39k 75k 100k 120k + 6x22k 1W OEM", "Beli kit resistor", "WAJIB ikuti netlist presisi 1% dan rating daya", false),
     BomItem("b36", "PASSIVE", "C_SMALL", "1 set", "4.7nF 10nF 100nF 10uF keramik / film", "PSU + Beli baru", "WAJIB kapasitor filter & bypass", false),
     BomItem("b37", "HARNESS", "WIRE_HV", "1 set", "Kabel isolasi tegangan tinggi 600V + heat-shrink", "Beli baru", "WAJIB jauh dari antena & sensor pulser", false)
   )
@@ -1201,15 +1220,6 @@ object WiringDataProvider {
    * tanpa merubah kompatibilitas wiring harness 12-pin (J1).
    */
   val modularDropInModules: List<ModularDropInModule> = listOf(
-    ModularDropInModule(
-      id = "mod_opto_4ch",
-      blockName = "OEM Learn Pasif (PB3 & PB4)",
-      moduleName = "Modul Optocoupler PC817 4-Channel Isolation Board",
-      replacesDiscrete = "2x IC PC817 diskrit + 2x 1N4148 + 2x resistor pullup 4.7k di perfboard",
-      estimatedPriceIdr = "Rp 15.000 - Rp 25.000",
-      keyFeatures = "Terminal baut screw, 4x LED indikator pulsa kedip, jumper pull-up VCC onboard, isolasi optik 3000V",
-      wiringSummary = "Koil Center J1.12 seri R 47k 2W -> IN1+, Koil Side J1.6 seri R 47k 2W -> IN2+, IN1-/IN2- ke GND, OUT1 ke PB3, OUT2 ke PB4, VCC/GND ke WeAct 3V3/GND"
-    ),
     ModularDropInModule(
       id = "mod_buck_5v",
       blockName = "Catu Daya Logic (+12V Kontak ke +5V WeAct)",
