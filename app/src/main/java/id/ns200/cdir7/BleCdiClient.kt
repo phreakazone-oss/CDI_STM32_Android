@@ -225,6 +225,10 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             }
         }
 
+        // Connection is only opened after the Activity grants BLUETOOTH_CONNECT.
+        // Keep the callback annotated because Android lint cannot carry that
+        // permission proof across the asynchronous GATT callback boundary.
+        @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(owner: BluetoothGatt, status: Int) {
             if (owner !== gatt) return
             cancelPhase()

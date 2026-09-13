@@ -9,7 +9,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// Robolectric's Android 36 preinstrumented SDK is not yet available on every
+// runner. SDK 35 still validates the app resources/API behavior used here.
+@Config(sdk = [35])
 class ExampleRobolectricTest {
 
   @Test
