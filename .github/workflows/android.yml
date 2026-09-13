@@ -29,6 +29,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Unit tests, lint, and debug APK
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
 
@@ -38,4 +41,3 @@ jobs:
           name: NS200-CDI-R8.2-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-
